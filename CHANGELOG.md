@@ -5,7 +5,7 @@
 ### Changed
 
 #### Switching to a proprietary license.
-License of **bc-wallet-common-lib-healthcheck** repository changed to proprietary.
+License of **bc-wallet-common-lib-healthcheck** repository changed to proprietary - commit revision number **0ba5c5feb09d22df6ed2c5e5ae5ec9ba0ac97367**.
 
 Origin repository - https://github.com/crypto-bundle/bc-wallet-common-lib-healthcheck
 
