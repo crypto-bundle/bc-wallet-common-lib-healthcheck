@@ -2,6 +2,10 @@ package healthcheck
 
 //go:generate easyjson types.go
 
+import (
+	_ "github.com/mailru/easyjson/gen"
+)
+
 type ProbeIndex uint8
 
 const (
@@ -32,7 +36,7 @@ func (i *ProbeIndex) String() string {
 
 // easyjson:json
 type Status struct {
-	IsHealed bool   `json:"is_healed"`
-	Message  string `json:"message"`
-	Error    error  `json:"error,omitempty"`
+	IsHealed bool    `json:"is_healed"`
+	Message  string  `json:"message"`
+	Error    *string `json:"error"`
 }
