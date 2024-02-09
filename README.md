@@ -12,14 +12,10 @@ Library contains:
 
 Each healthcheck probe it is http-server with uniq config and listen address/port.
 
-## Authors
-
 ## Contributors
 
 * Author and maintainer - [@gudron (Alex V Kotelnikov)](https://github.com/gudron)
 
 ## Licence
 
-**bc-wallet-common-lib-healthcheck** has a proprietary license.
-
-Switched to proprietary license from MIT - [CHANGELOG.MD - v0.0.2](./CHANGELOG.md)
+**bc-wallet-common-lib-healthcheck** is licensed under the [MIT](./LICENSE) License.

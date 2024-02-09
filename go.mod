@@ -1,4 +1,4 @@
-module gitlab.heronodes.io/bc-platform/bc-wallet-common-lib-healthcheck
+module github.com/crypto-bundle/bc-wallet-common-lib-healthcheck
 
 go 1.19
 
