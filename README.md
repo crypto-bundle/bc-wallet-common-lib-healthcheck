@@ -12,10 +12,9 @@ Library contains:
 
 Each healthcheck probe it is http-server with uniq config and listen address/port.
 
-## Authors
+## Contributors
 
-Author:
-* [@gudron (Alex V Kotelnikov)](https://github.com/gudron)
+* Author and maintainer - [@gudron (Alex V Kotelnikov)](https://github.com/gudron)
 
 ## Licence
 
