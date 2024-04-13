@@ -6,24 +6,99 @@ import (
 )
 
 type LivenessHTTPConfig struct {
-	HealthCheckLivenessHTTPPort         uint16        `envconfig:"HEALTH_CHECK_LIVENESS_HTTP_PORT" default:"8200"`
+	HealthCheckLivenessEnabled          bool          `envconfig:"HEALTH_CHECK_LIVENESS_ENABLED" default:"true"`
+	HealthCheckLivenessHTTPPort         uint          `envconfig:"HEALTH_CHECK_LIVENESS_HTTP_PORT" default:"8200"`
 	HealthCheckLivenessHTTPReadTimeout  time.Duration `envconfig:"HEALTH_CHECK_LIVENESS_HTTP_READ_TIMEOUT" default:"5s"`
 	HealthCheckLivenessHTTPWriteTimeout time.Duration `envconfig:"HEALTH_CHECK_LIVENESS_HTTP_WRITE_TIMEOUT" default:"10s"`
 	HealthCheckLivenessHTTPPath         string        `envconfig:"HEALTH_CHECK_LIVENESS_HTTP_PATH" default:"/liveness"`
 }
 
+func (c *LivenessHTTPConfig) IsLivenessProbeEnable() bool {
+	return c.HealthCheckLivenessEnabled
+}
+
+func (c *LivenessHTTPConfig) GetLivenessListenAddress() string {
+	return fmt.Sprintf(":%d", c.HealthCheckLivenessHTTPPort)
+}
+
+func (c *LivenessHTTPConfig) GetLivenessProbeRequestPath() string {
+	return c.HealthCheckLivenessHTTPPath
+}
+
+func (c *LivenessHTTPConfig) GetLivenessProbeReadTimeout() time.Duration {
+	return c.HealthCheckLivenessHTTPReadTimeout
+}
+
+func (c *LivenessHTTPConfig) GetLivenessProbeWriteTimeout() time.Duration {
+	return c.HealthCheckLivenessHTTPWriteTimeout
+}
+
+func (c *LivenessHTTPConfig) GetLivenessProbeListenPort() uint {
+	return c.HealthCheckLivenessHTTPPort
+}
+
 type ReadinessHTTPConfig struct {
-	HealthCheckReadinessHTTPPort         uint16        `envconfig:"HEALTH_CHECK_READINESS_HTTP_PORT" default:"8201"`
+	HealthCheckReadinessEnabled          bool          `envconfig:"HEALTH_CHECK_READINESS_ENABLED" default:"true"`
+	HealthCheckReadinessHTTPPort         uint          `envconfig:"HEALTH_CHECK_READINESS_HTTP_PORT" default:"8201"`
 	HealthCheckReadinessHTTPReadTimeout  time.Duration `envconfig:"HEALTH_CHECK_READINESS_HTTP_READ_TIMEOUT" default:"5s"`
 	HealthCheckReadinessHTTPWriteTimeout time.Duration `envconfig:"HEALTH_CHECK_READINESS_HTTP_WRITE_TIMEOUT" default:"10s"`
 	HealthCheckReadinessHTTPPath         string        `envconfig:"HEALTH_CHECK_READINESS_HTTP_PATH" default:"/rediness"`
 }
 
+func (c *ReadinessHTTPConfig) IsReadinessProbeEnable() bool {
+	return c.HealthCheckReadinessEnabled
+}
+
+func (c *ReadinessHTTPConfig) GetReadinessListenAddress() string {
+	return fmt.Sprintf(":%d", c.HealthCheckReadinessHTTPPort)
+}
+
+func (c *ReadinessHTTPConfig) GetReadinessProbeRequestPath() string {
+	return c.HealthCheckReadinessHTTPPath
+}
+
+func (c *ReadinessHTTPConfig) GetReadinessProbeReadTimeout() time.Duration {
+	return c.HealthCheckReadinessHTTPReadTimeout
+}
+
+func (c *ReadinessHTTPConfig) GetReadinessProbeWriteTimeout() time.Duration {
+	return c.HealthCheckReadinessHTTPWriteTimeout
+}
+
+func (c *ReadinessHTTPConfig) GetReadinessProbeListenPort() uint {
+	return c.HealthCheckReadinessHTTPPort
+}
+
 type StartupHTTPConfig struct {
-	HealthCheckStartupHTTPPort         uint16        `envconfig:"HEALTH_CHECK_STARTUP_HTTP_PORT" default:"8202"`
+	HealthCheckStartupEnabled          bool          `envconfig:"HEALTH_CHECK_STARTUP_ENABLED" default:"true"`
+	HealthCheckStartupHTTPPort         uint          `envconfig:"HEALTH_CHECK_STARTUP_HTTP_PORT" default:"8202"`
 	HealthCheckStartupHTTPReadTimeout  time.Duration `envconfig:"HEALTH_CHECK_STARTUP_HTTP_READ_TIMEOUT" default:"5s"`
 	HealthCheckStartupHTTPWriteTimeout time.Duration `envconfig:"HEALTH_CHECK_STARTUP_HTTP_WRITE_TIMEOUT" default:"10s"`
 	HealthCheckStartupHTTPPath         string        `envconfig:"HEALTH_CHECK_STARTUP_HTTP_PATH" default:"/startup"`
+}
+
+func (c *ReadinessHTTPConfig) IsStartupProbeEnable() bool {
+	return c.HealthCheckReadinessEnabled
+}
+
+func (c *StartupHTTPConfig) GetStartupListenAddress() string {
+	return fmt.Sprintf(":%d", c.HealthCheckStartupHTTPPort)
+}
+
+func (c *StartupHTTPConfig) GetStartupProbeRequestPath() string {
+	return c.HealthCheckStartupHTTPPath
+}
+
+func (c *StartupHTTPConfig) GetStartupProbeReadTimeout() time.Duration {
+	return c.HealthCheckStartupHTTPReadTimeout
+}
+
+func (c *StartupHTTPConfig) GetStartupProbeWriteTimeout() time.Duration {
+	return c.HealthCheckStartupHTTPWriteTimeout
+}
+
+func (c *StartupHTTPConfig) GetStartupProbeListenPort() uint {
+	return c.HealthCheckStartupHTTPPort
 }
 
 type HealthcheckHTTPConfig struct {
@@ -32,8 +107,8 @@ type HealthcheckHTTPConfig struct {
 	*StartupHTTPConfig
 }
 
-func (c *HealthcheckHTTPConfig) GetStartupParams() *unitParams {
-	return &unitParams{
+func (c *HealthcheckHTTPConfig) GetStartupParams() *unitConfig {
+	return &unitConfig{
 		HTTPListenPort:   c.HealthCheckStartupHTTPPort,
 		HTTPReadTimeout:  c.HealthCheckStartupHTTPReadTimeout,
 		HTTPWriteTimeout: c.HealthCheckStartupHTTPWriteTimeout,
@@ -42,8 +117,8 @@ func (c *HealthcheckHTTPConfig) GetStartupParams() *unitParams {
 	}
 }
 
-func (c *HealthcheckHTTPConfig) GetReadinessParams() *unitParams {
-	return &unitParams{
+func (c *HealthcheckHTTPConfig) GetReadinessParams() *unitConfig {
+	return &unitConfig{
 		HTTPListenPort:   c.HealthCheckReadinessHTTPPort,
 		HTTPReadTimeout:  c.HealthCheckReadinessHTTPReadTimeout,
 		HTTPWriteTimeout: c.HealthCheckReadinessHTTPWriteTimeout,
@@ -52,8 +127,8 @@ func (c *HealthcheckHTTPConfig) GetReadinessParams() *unitParams {
 	}
 }
 
-func (c *HealthcheckHTTPConfig) GetLivenessParams() *unitParams {
-	return &unitParams{
+func (c *HealthcheckHTTPConfig) GetLivenessParams() *unitConfig {
+	return &unitConfig{
 		HTTPListenPort:   c.HealthCheckLivenessHTTPPort,
 		HTTPReadTimeout:  c.HealthCheckLivenessHTTPReadTimeout,
 		HTTPWriteTimeout: c.HealthCheckLivenessHTTPWriteTimeout,
@@ -71,30 +146,30 @@ func (c *HealthcheckHTTPConfig) PrepareWith(cfgSrvList ...interface{}) error {
 	return nil
 }
 
-type unitParams struct {
-	HTTPListenPort   uint16
+type unitConfig struct {
+	HTTPListenPort   uint
 	HTTPReadTimeout  time.Duration
 	HTTPWriteTimeout time.Duration
 	HTTPPath         string
 	ProbeName        string
 }
 
-func (p *unitParams) GetListenAddress() string {
+func (p *unitConfig) GetListenAddress() string {
 	return fmt.Sprintf(":%d", p.HTTPListenPort)
 }
 
-func (p *unitParams) GetHTTPReadTimeout() time.Duration {
+func (p *unitConfig) GetHTTPReadTimeout() time.Duration {
 	return p.HTTPReadTimeout
 }
 
-func (p *unitParams) GetHTTPWriteTimeout() time.Duration {
+func (p *unitConfig) GetHTTPWriteTimeout() time.Duration {
 	return p.HTTPWriteTimeout
 }
 
-func (p *unitParams) GetRequestURL() string {
+func (p *unitConfig) GetRequestURL() string {
 	return p.HTTPPath
 }
 
-func (p *unitParams) GetProbeName() string {
+func (p *unitConfig) GetProbeName() string {
 	return p.ProbeName
 }

@@ -5,23 +5,36 @@ import (
 	"time"
 )
 
-type unitParamsService interface {
+type configService interface {
 	IsDebug() bool
-	GetProbeName() string
 
-	GetHTTPListenAddress() string
-	GetHTTPHandlerPath() string
-	GetHTTPReadTimeout() time.Duration
-	GetHTTPWriteTimeout() time.Duration
+	IsLivenessProbeEnable() bool
+	GetLivenessListenAddress() string
+	GetLivenessProbeRequestPath() string
+	GetLivenessProbeReadTimeout() time.Duration
+	GetLivenessProbeWriteTimeout() time.Duration
+	GetLivenessProbeListenPort() uint
+
+	IsReadinessProbeEnable() bool
+	GetReadinessListenAddress() string
+	GetReadinessProbeRequestPath() string
+	GetReadinessProbeReadTimeout() time.Duration
+	GetReadinessProbeWriteTimeout() time.Duration
+	GetReadinessProbeListenPort() uint
+
+	IsStartupProbeEnable() bool
+	GetStartupListenAddress() string
+	GetStartupProbeRequestPath() string
+	GetStartupProbeReadTimeout() time.Duration
+	GetStartupProbeWriteTimeout() time.Duration
+	GetStartupProbeListenPort() uint
 }
 
 type probeService interface {
-	Do(ctx context.Context) Status
-	Init(ctx context.Context) error
-	Shutdown(ctx context.Context) error
-	ListenAndServe(ctx context.Context) error
+	IsHealed(ctx context.Context) bool
 }
 
-type appDirectiveExecutionService interface {
-	Do(status Status) (httpStatus int, httpBody string)
+type probeHttpServer interface {
+	AddProbeUnit(unit probeService)
+	ListenAndServe(ctx context.Context) error
 }

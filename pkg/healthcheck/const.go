@@ -7,4 +7,7 @@ const (
 	RecoveryErrTag   = "recovery_error"
 	RecoveryStackTag = "recovery_stack"
 	RecoveryTimeTag  = "recovery_time"
+
+	AppHealthyMessage   = "Ok"
+	AppUnHealthyMessage = "Failed"
 )
