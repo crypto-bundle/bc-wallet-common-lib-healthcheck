@@ -46,8 +46,8 @@ func (s *probeUnit) AddProbeUnit(unit probeService) {
 	s.probeHandler.AddProbe(unit)
 }
 
-func newHTPPHealthCheckerServer(configSvc *unitConfig,
-	logger *zap.Logger,
+func newHTPPHealthCheckerServer(logger *zap.Logger,
+	configSvc *unitConfig,
 ) *probeUnit {
 	l := logger.Named("healthcheck_unit").
 		With(zap.String(ListenAddressTag, configSvc.GetListenAddress())).

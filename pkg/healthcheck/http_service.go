@@ -67,36 +67,36 @@ func (s *httpHealthChecker) AddStartupProbeUnit(probe probeService) error {
 	return nil
 }
 
-func NewHTTPHealthChecker(cfgSvc configService, l *zap.Logger) *httpHealthChecker {
+func NewHTTPHealthChecker(l *zap.Logger, cfgSvc configService) *httpHealthChecker {
 	probes := [3]probeHttpServer{}
 	if cfgSvc.IsStartupProbeEnable() {
-		probes[StartupProbeIndex] = newHTPPHealthCheckerServer(&unitConfig{
+		probes[StartupProbeIndex] = newHTPPHealthCheckerServer(l, &unitConfig{
 			HTTPListenPort:   cfgSvc.GetStartupProbeListenPort(),
 			HTTPReadTimeout:  cfgSvc.GetStartupProbeReadTimeout(),
 			HTTPWriteTimeout: cfgSvc.GetStartupProbeWriteTimeout(),
 			HTTPPath:         cfgSvc.GetStartupProbeRequestPath(),
 			ProbeName:        ProbeNameStartup,
-		}, l)
+		})
 	}
 
 	if cfgSvc.IsReadinessProbeEnable() {
-		probes[RedinessProbeIndex] = newHTPPHealthCheckerServer(&unitConfig{
+		probes[RedinessProbeIndex] = newHTPPHealthCheckerServer(l, &unitConfig{
 			HTTPListenPort:   cfgSvc.GetReadinessProbeListenPort(),
 			HTTPReadTimeout:  cfgSvc.GetReadinessProbeReadTimeout(),
 			HTTPWriteTimeout: cfgSvc.GetReadinessProbeWriteTimeout(),
 			HTTPPath:         cfgSvc.GetReadinessProbeRequestPath(),
 			ProbeName:        ProbeNameRediness,
-		}, l)
+		})
 	}
 
 	if cfgSvc.IsLivenessProbeEnable() {
-		probes[LivenessProbeIndex] = newHTPPHealthCheckerServer(&unitConfig{
+		probes[LivenessProbeIndex] = newHTPPHealthCheckerServer(l, &unitConfig{
 			HTTPListenPort:   cfgSvc.GetLivenessProbeListenPort(),
 			HTTPReadTimeout:  cfgSvc.GetLivenessProbeReadTimeout(),
 			HTTPWriteTimeout: cfgSvc.GetLivenessProbeWriteTimeout(),
 			HTTPPath:         cfgSvc.GetLivenessProbeRequestPath(),
 			ProbeName:        ProbeNameLiveness,
-		}, l)
+		})
 	}
 
 	healthChecker := &httpHealthChecker{
