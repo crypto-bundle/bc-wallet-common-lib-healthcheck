@@ -33,10 +33,3 @@ func (i *ProbeIndex) String() string {
 		return ProbeNameUnsupported
 	}
 }
-
-// easyjson:json
-type Status struct {
-	IsHealed bool    `json:"is_healed"`
-	Message  string  `json:"message"`
-	Error    *string `json:"error"`
-}

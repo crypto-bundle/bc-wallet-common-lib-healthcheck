@@ -7,38 +7,25 @@ import (
 )
 
 var (
-	ErrProbeAlreadyExist = errors.New("passed probe already exist")
+	ErrProbeTypeNotEnabled = errors.New("healthcheck probe not enabled")
 )
 
 type httpHealthChecker struct {
 	logger *zap.Logger
 
-	probes [3]probeService // liveness, rediness, startup
-}
-
-func (s *httpHealthChecker) Init(ctx context.Context) error {
-	for _, probe := range s.probes {
-		if probe == nil {
-			continue
-		}
-
-		err := probe.Init(ctx)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+	probes [3]probeHttpServer // liveness, rediness, startup
 }
 
 func (s *httpHealthChecker) ListenAndServe(ctx context.Context) error {
+	cancelCtx, _ := context.WithCancel(ctx)
+
 	for _, probe := range s.probes {
 		if probe == nil {
 			continue
 		}
 
-		go func(probeSrv probeService) {
-			err := probeSrv.ListenAndServe(ctx)
+		go func(probeSrv probeHttpServer) {
+			err := probeSrv.ListenAndServe(cancelCtx)
 			if err != nil {
 				s.logger.Info("unable to start listen and server process for probe")
 			}
@@ -50,59 +37,71 @@ func (s *httpHealthChecker) ListenAndServe(ctx context.Context) error {
 	return nil
 }
 
-func (s *httpHealthChecker) AddLivenessProbe(probe probeService) error {
-	if s.probes[LivenessProbeIndex] != nil {
-		return ErrProbeAlreadyExist
+func (s *httpHealthChecker) AddLivenessProbeUnit(probe probeService) error {
+	if s.probes[LivenessProbeIndex] == nil {
+		return ErrProbeTypeNotEnabled
 	}
 
-	s.probes[LivenessProbeIndex] = probe
+	s.probes[LivenessProbeIndex].AddProbeUnit(probe)
 
 	return nil
 }
 
-func (s *httpHealthChecker) AddRedinessProbe(probe probeService) error {
-	if s.probes[RedinessProbeIndex] != nil {
-		return ErrProbeAlreadyExist
+func (s *httpHealthChecker) AddRedinessProbeUnit(probe probeService) error {
+	if s.probes[RedinessProbeIndex] == nil {
+		return ErrProbeTypeNotEnabled
 	}
 
-	s.probes[RedinessProbeIndex] = probe
+	s.probes[RedinessProbeIndex].AddProbeUnit(probe)
 
 	return nil
 }
 
-func (s *httpHealthChecker) AddStartupProbe(probe probeService) error {
-	if s.probes[StartupProbeIndex] != nil {
-		return ErrProbeAlreadyExist
+func (s *httpHealthChecker) AddStartupProbeUnit(probe probeService) error {
+	if s.probes[StartupProbeIndex] == nil {
+		return ErrProbeTypeNotEnabled
 	}
 
-	s.probes[StartupProbeIndex] = probe
+	s.probes[StartupProbeIndex].AddProbeUnit(probe)
 
 	return nil
 }
 
-func (s *httpHealthChecker) Shutdown(ctx context.Context) error {
-	for _, probe := range s.probes {
-		if probe == nil {
-			continue
-		}
-
-		go func(probeSrv probeService) {
-			err := probeSrv.Shutdown(ctx)
-			if err != nil {
-				s.logger.Info("unable to stop probe")
-			}
-		}(probe)
+func NewHTTPHealthChecker(l *zap.Logger, cfgSvc configService) *httpHealthChecker {
+	probes := [3]probeHttpServer{}
+	if cfgSvc.IsStartupProbeEnable() {
+		probes[StartupProbeIndex] = newHTPPHealthCheckerServer(l, &unitConfig{
+			HTTPListenPort:   cfgSvc.GetStartupProbeListenPort(),
+			HTTPReadTimeout:  cfgSvc.GetStartupProbeReadTimeout(),
+			HTTPWriteTimeout: cfgSvc.GetStartupProbeWriteTimeout(),
+			HTTPPath:         cfgSvc.GetStartupProbeRequestPath(),
+			ProbeName:        ProbeNameStartup,
+		})
 	}
 
-	s.logger.Info("all probes successfully stopped")
+	if cfgSvc.IsReadinessProbeEnable() {
+		probes[RedinessProbeIndex] = newHTPPHealthCheckerServer(l, &unitConfig{
+			HTTPListenPort:   cfgSvc.GetReadinessProbeListenPort(),
+			HTTPReadTimeout:  cfgSvc.GetReadinessProbeReadTimeout(),
+			HTTPWriteTimeout: cfgSvc.GetReadinessProbeWriteTimeout(),
+			HTTPPath:         cfgSvc.GetReadinessProbeRequestPath(),
+			ProbeName:        ProbeNameRediness,
+		})
+	}
 
-	return nil
-}
+	if cfgSvc.IsLivenessProbeEnable() {
+		probes[LivenessProbeIndex] = newHTPPHealthCheckerServer(l, &unitConfig{
+			HTTPListenPort:   cfgSvc.GetLivenessProbeListenPort(),
+			HTTPReadTimeout:  cfgSvc.GetLivenessProbeReadTimeout(),
+			HTTPWriteTimeout: cfgSvc.GetLivenessProbeWriteTimeout(),
+			HTTPPath:         cfgSvc.GetLivenessProbeRequestPath(),
+			ProbeName:        ProbeNameLiveness,
+		})
+	}
 
-func NewHTTPHealthChecker(l *zap.Logger) *httpHealthChecker {
 	healthChecker := &httpHealthChecker{
 		logger: l,
-		probes: [3]probeService{},
+		probes: probes,
 	}
 
 	return healthChecker
