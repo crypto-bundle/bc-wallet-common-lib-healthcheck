@@ -1,13 +1,11 @@
 # Change Log
 
 ## [v0.0.2] - 09.02.2023 10:38 MSK
-
-### Addded
+### Added
 * Separated config by probe type. Added readme.md file
-
 ### Changed
 * Refactored healthcheck service - moved to new repository - https://github.com/crypto-bundle/bc-wallet-common-lib-healthcheck
-* Swithched-back to MIT license
+* Switched-back to MIT license
 
 ## [v0.0.3] - 13.04.2024
 ### Changed
@@ -16,3 +14,7 @@
   * Changed probe unit dependency requirements
   * Added new field to probe config structs
   * Changed shutdown flow
+
+## [v0.0.4] - 16.04.2024
+### Changed
+* Bump golang version 1.19 -> 1.22
