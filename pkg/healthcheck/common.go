@@ -34,6 +34,8 @@ package healthcheck
 
 import (
 	"context"
+	"log"
+	"log/slog"
 	"time"
 )
 
@@ -69,6 +71,15 @@ type probeService interface {
 type probeHttpServer interface {
 	AddProbeUnit(unit probeService)
 	ListenAndServe(ctx context.Context) error
+}
+
+type loggerService interface {
+	NewStdLoggerEntry(fields ...any) *log.Logger
+	NewStdNamedLoggerEntry(named string, fields ...any) *log.Logger
+
+	NewSlogLoggerEntry(fields ...any) *slog.Logger
+	NewSlogNamedLoggerEntry(named string, fields ...any) *slog.Logger
+	NewSlogLoggerEntryWithFields(fields ...slog.Attr) *slog.Logger
 }
 
 type errorFormatterService interface {

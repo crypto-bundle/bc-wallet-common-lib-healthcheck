@@ -35,7 +35,7 @@ package healthcheck
 import (
 	"context"
 	"errors"
-	"go.uber.org/zap"
+	"log/slog"
 )
 
 var (
@@ -43,8 +43,10 @@ var (
 )
 
 type httpHealthChecker struct {
-	l *zap.Logger
+	l *slog.Logger
 	e errorFormatterService
+
+	logFactory loggerService
 
 	probes [3]probeHttpServer // liveness, rediness, startup
 }
@@ -60,7 +62,7 @@ func (s *httpHealthChecker) ListenAndServe(ctx context.Context) error {
 		go func(probeSrv probeHttpServer) {
 			err := probeSrv.ListenAndServe(cancelCtx)
 			if err != nil {
-				s.l.Error("unable to start listen and server process for probe", zap.Error(err))
+				s.l.Error("unable to start listen and server process for probe", err)
 			}
 		}(probe)
 	}
@@ -100,43 +102,46 @@ func (s *httpHealthChecker) AddStartupProbeUnit(probe probeService) error {
 	return nil
 }
 
-func NewHTTPHealthChecker(l *zap.Logger,
+func NewHTTPHealthChecker(logFactorySvc loggerService,
 	errFmtSvc errorFormatterService,
 	cfgSvc configService,
 ) *httpHealthChecker {
 	probes := [3]probeHttpServer{}
 	if cfgSvc.IsStartupProbeEnable() {
-		probes[StartupProbeIndex] = newHTPPHealthCheckerServer(l, errFmtSvc, &unitConfig{
-			HTTPListenPort:   cfgSvc.GetStartupProbeListenPort(),
-			HTTPReadTimeout:  cfgSvc.GetStartupProbeReadTimeout(),
-			HTTPWriteTimeout: cfgSvc.GetStartupProbeWriteTimeout(),
-			HTTPPath:         cfgSvc.GetStartupProbeRequestPath(),
-			ProbeName:        ProbeNameStartup,
-		})
+		probes[StartupProbeIndex] = newHTPPHealthCheckerServer(logFactorySvc,
+			errFmtSvc, &unitConfig{
+				HTTPListenPort:   cfgSvc.GetStartupProbeListenPort(),
+				HTTPReadTimeout:  cfgSvc.GetStartupProbeReadTimeout(),
+				HTTPWriteTimeout: cfgSvc.GetStartupProbeWriteTimeout(),
+				HTTPPath:         cfgSvc.GetStartupProbeRequestPath(),
+				ProbeName:        ProbeNameStartup,
+			})
 	}
 
 	if cfgSvc.IsReadinessProbeEnable() {
-		probes[RedinessProbeIndex] = newHTPPHealthCheckerServer(l, errFmtSvc, &unitConfig{
-			HTTPListenPort:   cfgSvc.GetReadinessProbeListenPort(),
-			HTTPReadTimeout:  cfgSvc.GetReadinessProbeReadTimeout(),
-			HTTPWriteTimeout: cfgSvc.GetReadinessProbeWriteTimeout(),
-			HTTPPath:         cfgSvc.GetReadinessProbeRequestPath(),
-			ProbeName:        ProbeNameRediness,
-		})
+		probes[RedinessProbeIndex] = newHTPPHealthCheckerServer(logFactorySvc,
+			errFmtSvc, &unitConfig{
+				HTTPListenPort:   cfgSvc.GetReadinessProbeListenPort(),
+				HTTPReadTimeout:  cfgSvc.GetReadinessProbeReadTimeout(),
+				HTTPWriteTimeout: cfgSvc.GetReadinessProbeWriteTimeout(),
+				HTTPPath:         cfgSvc.GetReadinessProbeRequestPath(),
+				ProbeName:        ProbeNameRediness,
+			})
 	}
 
 	if cfgSvc.IsLivenessProbeEnable() {
-		probes[LivenessProbeIndex] = newHTPPHealthCheckerServer(l, errFmtSvc, &unitConfig{
-			HTTPListenPort:   cfgSvc.GetLivenessProbeListenPort(),
-			HTTPReadTimeout:  cfgSvc.GetLivenessProbeReadTimeout(),
-			HTTPWriteTimeout: cfgSvc.GetLivenessProbeWriteTimeout(),
-			HTTPPath:         cfgSvc.GetLivenessProbeRequestPath(),
-			ProbeName:        ProbeNameLiveness,
-		})
+		probes[LivenessProbeIndex] = newHTPPHealthCheckerServer(logFactorySvc,
+			errFmtSvc, &unitConfig{
+				HTTPListenPort:   cfgSvc.GetLivenessProbeListenPort(),
+				HTTPReadTimeout:  cfgSvc.GetLivenessProbeReadTimeout(),
+				HTTPWriteTimeout: cfgSvc.GetLivenessProbeWriteTimeout(),
+				HTTPPath:         cfgSvc.GetLivenessProbeRequestPath(),
+				ProbeName:        ProbeNameLiveness,
+			})
 	}
 
 	healthChecker := &httpHealthChecker{
-		l: l,
+		l: logFactorySvc.NewSlogNamedLoggerEntry("healthcheck"),
 		e: errFmtSvc,
 
 		probes: probes,

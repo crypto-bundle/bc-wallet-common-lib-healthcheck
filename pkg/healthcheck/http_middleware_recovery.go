@@ -35,10 +35,9 @@ package healthcheck
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"time"
-
-	"go.uber.org/zap"
 )
 
 var (
@@ -46,17 +45,17 @@ var (
 )
 
 type middleware struct {
-	logger      *zap.Logger
+	logger      *slog.Logger
 	httpHandler http.Handler
 }
 
 type middlewareRecovery struct {
-	logger *zap.Logger
+	l *slog.Logger
 }
 
-func newRecoveryMiddleware(l *zap.Logger) *middlewareRecovery {
+func newRecoveryMiddleware(l *slog.Logger) *middlewareRecovery {
 	return &middlewareRecovery{
-		logger: l,
+		l: l,
 	}
 }
 
@@ -69,16 +68,14 @@ func (m *middlewareRecovery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			respText := fmt.Sprintf("%e\n%+v\n", ErrHealthCheckRecovery, recoverErr)
 			_, writeErr := w.Write([]byte(respText))
 			if writeErr != nil {
-				m.logger.Error("unable to write response",
-					zap.Error(writeErr),
-					zap.Time(RecoveryTimeTag, time.Now()),
+				m.l.Error("unable to write response", writeErr,
+					slog.Time(RecoveryTimeTag, time.Now()),
 				)
 			}
 
-			m.logger.Error("called recovery flow", zap.Error(ErrHealthCheckRecovery),
-				zap.Any(RecoveryErrTag, recoverErr),
-				zap.Time(RecoveryTimeTag, time.Now()),
-				zap.Stack(RecoveryStackTag),
+			m.l.Error("called recovery flow", ErrHealthCheckRecovery,
+				slog.Any(RecoveryErrTag, recoverErr),
+				slog.Time(RecoveryTimeTag, time.Now()),
 			)
 		}
 	}()
@@ -98,6 +95,6 @@ func (m *middleware) GetHTTPHandler() http.Handler {
 	return m.httpHandler
 }
 
-func newMiddleware(l *zap.Logger) *middleware {
+func newMiddleware(l *slog.Logger) *middleware {
 	return &middleware{logger: l}
 }

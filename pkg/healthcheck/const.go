@@ -40,6 +40,7 @@ const (
 	RecoveryStackTag = "recovery_stack"
 	RecoveryTimeTag  = "recovery_time"
 
+	ProbeTypeTag        = "probe_type"
 	AppHealthyMessage   = "Ok"
 	AppUnHealthyMessage = "Failed"
 )
