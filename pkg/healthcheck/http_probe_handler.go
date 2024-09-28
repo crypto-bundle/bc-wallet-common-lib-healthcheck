@@ -56,6 +56,7 @@ func (h *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	var isHealed = true
 	var message string
+
 	for i := 0; i != len(h.probes); i++ {
 		isHealed = isHealed && h.probes[i].IsHealed(r.Context())
 	}

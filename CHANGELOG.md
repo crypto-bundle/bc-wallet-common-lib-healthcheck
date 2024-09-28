@@ -1,9 +1,11 @@
 # Change Log
 
-## [v0.0.5] - 28.09.2024
+## [v0.0.5, v0.0.6] - 28.09.2024
 ### Added
 * Added support of new version of lib-logger library
+* Added slog.Logger
 ### Changed
+* Removed zap.Logger dependency
 * Changed MIT License to NON-AI MIT
 * Added License banner to all *.go files
 

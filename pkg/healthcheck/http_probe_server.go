@@ -34,12 +34,12 @@ package healthcheck
 
 import (
 	"context"
-	"go.uber.org/zap"
+	"log/slog"
 	"net/http"
 )
 
 type probeUnit struct {
-	l *zap.Logger
+	l *slog.Logger
 	e errorFormatterService
 
 	cfg *unitConfig
@@ -53,7 +53,7 @@ type probeUnit struct {
 func (s *probeUnit) ListenAndServe(ctx context.Context) error {
 	err := s.httpSrv.ListenAndServe()
 	if err != nil {
-		s.l.Error("unable to listen and serve http server", zap.Error(err))
+		s.l.Error("unable to listen and serve http server", err)
 
 		return s.e.ErrorOnly(err)
 	}
@@ -64,14 +64,14 @@ func (s *probeUnit) ListenAndServe(ctx context.Context) error {
 
 	err = s.httpSrv.Shutdown(ctx)
 	if err != nil {
-		s.l.Error("unable to shutdown http server", zap.Error(err))
+		s.l.Error("unable to shutdown http server", err)
 
 		return s.e.ErrorOnly(err)
 	}
 
 	err = s.httpSrv.Close()
 	if err != nil {
-		s.l.Error("unable to close http server", zap.Error(err))
+		s.l.Error("unable to close http server", err)
 
 		return s.e.ErrorOnly(err)
 	}
@@ -83,20 +83,20 @@ func (s *probeUnit) AddProbeUnit(unit probeService) {
 	s.probeHandler.AddProbe(unit)
 }
 
-func newHTPPHealthCheckerServer(logger *zap.Logger,
+func newHTPPHealthCheckerServer(logFactorySvc loggerService,
 	errFmtSvc errorFormatterService,
 	configSvc *unitConfig,
 ) *probeUnit {
-	l := logger.Named("healthcheck_unit").
-		With(zap.String(ListenAddressTag, configSvc.GetListenAddress())).
-		With(zap.String(UnitNameTag, configSvc.GetProbeName()))
+	l := logFactorySvc.NewSlogNamedLoggerEntry("healthcheck_unit",
+		slog.String(ListenAddressTag, configSvc.GetListenAddress()),
+		slog.String(UnitNameTag, configSvc.GetProbeName()))
 
 	mux := http.NewServeMux()
 
-	httpMiddleware := newMiddleware(logger)
+	httpMiddleware := newMiddleware(l)
 	handler := newHttpHandler()
 	handlerWithMiddleware := httpMiddleware.With(handler).
-		With(newRecoveryMiddleware(logger))
+		With(newRecoveryMiddleware(l))
 
 	mux.Handle(configSvc.GetRequestURL(), handlerWithMiddleware.GetHTTPHandler())
 
@@ -105,7 +105,7 @@ func newHTPPHealthCheckerServer(logger *zap.Logger,
 		Handler:      mux,
 		ReadTimeout:  configSvc.GetHTTPReadTimeout(),
 		WriteTimeout: configSvc.GetHTTPWriteTimeout(),
-		ErrorLog:     zap.NewStdLog(logger),
+		ErrorLog:     logFactorySvc.NewStdLoggerEntry(),
 	}
 
 	return &probeUnit{
