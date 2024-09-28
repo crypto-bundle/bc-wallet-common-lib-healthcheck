@@ -18,4 +18,4 @@ Each healthcheck probe it is http-server with uniq config and listen address/por
 
 ## Licence
 
-**bc-wallet-common-lib-healthcheck** is licensed under the [MIT](./LICENSE) License.
+**bc-wallet-common-lib-healthcheck** is licensed under the [MIT NON-AI](./LICENSE) License.
