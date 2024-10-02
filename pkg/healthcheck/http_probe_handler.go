@@ -64,16 +64,15 @@ func (h *httpHandler) ServeHTTP(respWriter http.ResponseWriter, httpReq *http.Re
 	}
 
 	if isHealed {
-		h.writeResponse(respWriter, httpReq, http.StatusOK, AppHealthyMessage)
+		h.writeResponse(respWriter, http.StatusOK, AppHealthyMessage)
 
 		return
 	}
 
-	h.writeResponse(respWriter, httpReq, http.StatusTeapot, AppUnHealthyMessage)
+	h.writeResponse(respWriter, http.StatusTeapot, AppUnHealthyMessage)
 }
 
 func (h *httpHandler) writeResponse(respWriter http.ResponseWriter,
-	_ *http.Request,
 	statusCode int,
 	message string,
 ) {

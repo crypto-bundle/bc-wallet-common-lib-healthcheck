@@ -2,6 +2,10 @@
 
 ## [v0.0.7] - 03.09.2024
 ### Added
+* Added linters checks:
+  * Added linters config
+  * Fixed all liners issues
+* Changed error formatter interface - need for new version of lib-errors
 
 ## [v0.0.5, v0.0.6] - 28.09.2024
 ### Added
