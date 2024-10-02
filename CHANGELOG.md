@@ -1,8 +1,12 @@
 # Change Log
 
+## [v0.0.7] - 03.09.2024
+### Added
+
 ## [v0.0.5, v0.0.6] - 28.09.2024
 ### Added
 * Added support of new version of lib-logger library
+* Added support of new ver of lib-errors library
 * Added slog.Logger
 ### Changed
 * Removed zap.Logger dependency

@@ -32,12 +32,6 @@
 
 package healthcheck
 
-//go:generate easyjson types.go
-
-import (
-	_ "github.com/mailru/easyjson/gen"
-)
-
 type ProbeIndex uint8
 
 const (

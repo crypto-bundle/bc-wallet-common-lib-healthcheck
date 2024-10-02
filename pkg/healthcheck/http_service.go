@@ -46,21 +46,17 @@ type httpHealthChecker struct {
 	l *slog.Logger
 	e errorFormatterService
 
-	logFactory loggerService
-
-	probes [3]probeHttpServer // liveness, rediness, startup
+	probes [3]probeHTTPServer // liveness, rediness, startup
 }
 
 func (s *httpHealthChecker) ListenAndServe(ctx context.Context) error {
-	cancelCtx, _ := context.WithCancel(ctx)
-
 	for _, probe := range s.probes {
 		if probe == nil {
 			continue
 		}
 
-		go func(probeSrv probeHttpServer) {
-			err := probeSrv.ListenAndServe(cancelCtx)
+		go func(probeSrv probeHTTPServer) {
+			err := probeSrv.ListenAndServe(ctx)
 			if err != nil {
 				s.l.Error("unable to start listen and server process for probe", err)
 			}
@@ -106,7 +102,7 @@ func NewHTTPHealthChecker(logFactorySvc loggerService,
 	errFmtSvc errorFormatterService,
 	cfgSvc configService,
 ) *httpHealthChecker {
-	probes := [3]probeHttpServer{}
+	probes := [3]probeHTTPServer{}
 	if cfgSvc.IsStartupProbeEnable() {
 		probes[StartupProbeIndex] = newHTPPHealthCheckerServer(logFactorySvc,
 			errFmtSvc, &unitConfig{
