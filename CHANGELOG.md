@@ -1,6 +1,6 @@
 # Change Log
 
-## [v0.0.7] - 03.09.2024
+## [v0.0.7] - 03.10.2024
 ### Added
 * Added linters checks:
   * Added linters config
