@@ -87,19 +87,20 @@ func newHTPPHealthCheckerServer(logFactorySvc loggerService,
 	errFmtSvc errorFormatterService,
 	configSvc *unitConfig,
 ) *probeUnit {
-	l := logFactorySvc.NewSlogNamedLoggerEntry("healthcheck_unit",
+	logger := logFactorySvc.NewSlogNamedLoggerEntry("healthcheck_unit",
 		slog.String(ListenAddressTag, configSvc.GetListenAddress()),
 		slog.String(UnitNameTag, configSvc.GetProbeName()))
 
 	mux := http.NewServeMux()
 
-	httpMiddleware := newMiddleware(l)
-	handler := newHttpHandler()
+	httpMiddleware := newMiddleware(logger)
+	handler := newHTTPHandler(logger)
 	handlerWithMiddleware := httpMiddleware.With(handler).
-		With(newRecoveryMiddleware(l))
+		With(newRecoveryMiddleware(logger))
 
 	mux.Handle(configSvc.GetRequestURL(), handlerWithMiddleware.GetHTTPHandler())
 
+	//nolint:exhaustruct // it's ok here. we don't need to fully fill up http.Server struct
 	server := &http.Server{
 		Addr:         configSvc.GetListenAddress(),
 		Handler:      mux,
@@ -109,7 +110,7 @@ func newHTPPHealthCheckerServer(logFactorySvc loggerService,
 	}
 
 	return &probeUnit{
-		l: l,
+		l: logger,
 		e: errFmtSvc,
 
 		cfg: configSvc,

@@ -33,14 +33,17 @@
 package healthcheck
 
 import (
+	"log/slog"
 	"net/http"
 	"sync"
 )
 
 type httpHandler struct {
-	mu sync.RWMutex
+	l *slog.Logger
 
 	probes []probeService
+
+	mu sync.RWMutex
 }
 
 func (h *httpHandler) AddProbe(svc probeService) {
@@ -50,36 +53,45 @@ func (h *httpHandler) AddProbe(svc probeService) {
 	h.probes = append(h.probes, svc)
 }
 
-func (h *httpHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (h *httpHandler) ServeHTTP(respWriter http.ResponseWriter, httpReq *http.Request) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
 	var isHealed = true
-	var message string
 
 	for i := 0; i != len(h.probes); i++ {
-		isHealed = isHealed && h.probes[i].IsHealed(r.Context())
+		isHealed = isHealed && h.probes[i].IsHealed(httpReq.Context())
 	}
 
 	if isHealed {
-		message = AppHealthyMessage
-		w.WriteHeader(http.StatusOK)
-	} else {
-		message = AppUnHealthyMessage
-		w.WriteHeader(http.StatusTeapot)
-	}
+		h.writeResponse(respWriter, http.StatusOK, AppHealthyMessage)
 
-	w.Header().Add("Content-Type", "text/plain")
-	_, writeErr := w.Write([]byte(message))
-	if writeErr != nil {
 		return
 	}
 
-	return
+	h.writeResponse(respWriter, http.StatusTeapot, AppUnHealthyMessage)
 }
 
-func newHttpHandler() *httpHandler {
+func (h *httpHandler) writeResponse(respWriter http.ResponseWriter,
+	statusCode int,
+	message string,
+) {
+	respWriter.WriteHeader(statusCode)
+	respWriter.Header().Add("Content-Type", "text/plain")
+
+	_, writeErr := respWriter.Write([]byte(message))
+	if writeErr != nil {
+		h.l.Error("unable to write http probe response", writeErr)
+
+		return
+	}
+}
+
+func newHTTPHandler(logger *slog.Logger) *httpHandler {
 	return &httpHandler{
+		mu: sync.RWMutex{},
+
+		l:      logger,
 		probes: nil,
 	}
 }

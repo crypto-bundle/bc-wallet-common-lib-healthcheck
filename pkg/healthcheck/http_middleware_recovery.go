@@ -59,14 +59,16 @@ func newRecoveryMiddleware(l *slog.Logger) *middlewareRecovery {
 	}
 }
 
-func (m *middlewareRecovery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+func (m *middlewareRecovery) ServeHTTP(respWriter http.ResponseWriter, _ *http.Request) {
 	defer func() {
 		recoverErr := recover()
 		if recoverErr != nil {
-			w.WriteHeader(http.StatusInternalServerError)
-			w.Header().Add("Content-Type", "text/plain")
+			respWriter.WriteHeader(http.StatusInternalServerError)
+			respWriter.Header().Add("Content-Type", "text/plain")
+
 			respText := fmt.Sprintf("%e\n%+v\n", ErrHealthCheckRecovery, recoverErr)
-			_, writeErr := w.Write([]byte(respText))
+
+			_, writeErr := respWriter.Write([]byte(respText))
 			if writeErr != nil {
 				m.l.Error("unable to write response", writeErr,
 					slog.Time(RecoveryTimeTag, time.Now()),
@@ -79,8 +81,6 @@ func (m *middlewareRecovery) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			)
 		}
 	}()
-
-	return
 }
 
 func (m *middleware) With(next http.Handler) *middleware {
@@ -96,5 +96,8 @@ func (m *middleware) GetHTTPHandler() http.Handler {
 }
 
 func newMiddleware(l *slog.Logger) *middleware {
-	return &middleware{logger: l}
+	return &middleware{
+		logger:      l,
+		httpHandler: nil,
+	}
 }

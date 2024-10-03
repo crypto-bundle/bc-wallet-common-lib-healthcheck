@@ -38,11 +38,11 @@ import (
 )
 
 type LivenessHTTPConfig struct {
-	HealthCheckLivenessEnabled          bool          `envconfig:"HEALTH_CHECK_LIVENESS_ENABLED" default:"true"`
+	HealthCheckLivenessHTTPPath         string        `envconfig:"HEALTH_CHECK_LIVENESS_HTTP_PATH" default:"/liveness"`
 	HealthCheckLivenessHTTPPort         uint          `envconfig:"HEALTH_CHECK_LIVENESS_HTTP_PORT" default:"8200"`
 	HealthCheckLivenessHTTPReadTimeout  time.Duration `envconfig:"HEALTH_CHECK_LIVENESS_HTTP_READ_TIMEOUT" default:"5s"`
 	HealthCheckLivenessHTTPWriteTimeout time.Duration `envconfig:"HEALTH_CHECK_LIVENESS_HTTP_WRITE_TIMEOUT" default:"10s"`
-	HealthCheckLivenessHTTPPath         string        `envconfig:"HEALTH_CHECK_LIVENESS_HTTP_PATH" default:"/liveness"`
+	HealthCheckLivenessEnabled          bool          `envconfig:"HEALTH_CHECK_LIVENESS_ENABLED" default:"true"`
 }
 
 func (c *LivenessHTTPConfig) IsLivenessProbeEnable() bool {
@@ -70,11 +70,11 @@ func (c *LivenessHTTPConfig) GetLivenessProbeListenPort() uint {
 }
 
 type ReadinessHTTPConfig struct {
-	HealthCheckReadinessEnabled          bool          `envconfig:"HEALTH_CHECK_READINESS_ENABLED" default:"true"`
+	HealthCheckReadinessHTTPPath         string        `envconfig:"HEALTH_CHECK_READINESS_HTTP_PATH" default:"/rediness"`
 	HealthCheckReadinessHTTPPort         uint          `envconfig:"HEALTH_CHECK_READINESS_HTTP_PORT" default:"8201"`
 	HealthCheckReadinessHTTPReadTimeout  time.Duration `envconfig:"HEALTH_CHECK_READINESS_HTTP_READ_TIMEOUT" default:"5s"`
 	HealthCheckReadinessHTTPWriteTimeout time.Duration `envconfig:"HEALTH_CHECK_READINESS_HTTP_WRITE_TIMEOUT" default:"10s"`
-	HealthCheckReadinessHTTPPath         string        `envconfig:"HEALTH_CHECK_READINESS_HTTP_PATH" default:"/rediness"`
+	HealthCheckReadinessEnabled          bool          `envconfig:"HEALTH_CHECK_READINESS_ENABLED" default:"true"`
 }
 
 func (c *ReadinessHTTPConfig) IsReadinessProbeEnable() bool {
@@ -102,11 +102,11 @@ func (c *ReadinessHTTPConfig) GetReadinessProbeListenPort() uint {
 }
 
 type StartupHTTPConfig struct {
-	HealthCheckStartupEnabled          bool          `envconfig:"HEALTH_CHECK_STARTUP_ENABLED" default:"true"`
+	HealthCheckStartupHTTPPath         string        `envconfig:"HEALTH_CHECK_STARTUP_HTTP_PATH" default:"/startup"`
 	HealthCheckStartupHTTPPort         uint          `envconfig:"HEALTH_CHECK_STARTUP_HTTP_PORT" default:"8202"`
 	HealthCheckStartupHTTPReadTimeout  time.Duration `envconfig:"HEALTH_CHECK_STARTUP_HTTP_READ_TIMEOUT" default:"5s"`
 	HealthCheckStartupHTTPWriteTimeout time.Duration `envconfig:"HEALTH_CHECK_STARTUP_HTTP_WRITE_TIMEOUT" default:"10s"`
-	HealthCheckStartupHTTPPath         string        `envconfig:"HEALTH_CHECK_STARTUP_HTTP_PATH" default:"/startup"`
+	HealthCheckStartupEnabled          bool          `envconfig:"HEALTH_CHECK_STARTUP_ENABLED" default:"true"`
 }
 
 func (c *ReadinessHTTPConfig) IsStartupProbeEnable() bool {
@@ -169,7 +169,7 @@ func (c *HealthcheckHTTPConfig) GetLivenessParams() *unitConfig {
 	}
 }
 
-// Prepare variables to static configuration
+// Prepare variables to static configuration...
 func (c *HealthcheckHTTPConfig) Prepare() error {
 	return nil
 }
@@ -179,11 +179,11 @@ func (c *HealthcheckHTTPConfig) PrepareWith(cfgSrvList ...interface{}) error {
 }
 
 type unitConfig struct {
+	HTTPPath         string
+	ProbeName        string
 	HTTPListenPort   uint
 	HTTPReadTimeout  time.Duration
 	HTTPWriteTimeout time.Duration
-	HTTPPath         string
-	ProbeName        string
 }
 
 func (p *unitConfig) GetListenAddress() string {
