@@ -1,9 +1,7 @@
 /*
- *
- *
  * MIT NON-AI License
  *
- * Copyright (c) 2022-2024 Aleksei Kotelnikov(gudron2s@gmail.com)
+ * Copyright (c) 2022-2025 Aleksei Kotelnikov(gudron2s@gmail.com)
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of the software and associated documentation files (the "Software"),
  * to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
@@ -58,7 +56,8 @@ func (s *httpHealthChecker) ListenAndServe(ctx context.Context) error {
 		go func(probeSrv probeHTTPServer) {
 			err := probeSrv.ListenAndServe(ctx)
 			if err != nil {
-				s.l.Error("unable to start listen and server process for probe", err)
+				s.l.Error("unable to start listen and server process for probe",
+					slog.Any("errors", err))
 			}
 		}(probe)
 	}
@@ -98,11 +97,12 @@ func (s *httpHealthChecker) AddStartupProbeUnit(probe probeService) error {
 	return nil
 }
 
-func NewHTTPHealthChecker(logFactorySvc loggerService,
+func NewHTTPHealthChecker(logFactorySvc loggerBuilderService,
 	errFmtSvc errorFormatterService,
 	cfgSvc configService,
 ) *httpHealthChecker {
-	probes := [3]probeHTTPServer{}
+	probes := [ProbeIndexMaxValuePlaceholder]probeHTTPServer{}
+
 	if cfgSvc.IsStartupProbeEnable() {
 		probes[StartupProbeIndex] = newHTPPHealthCheckerServer(logFactorySvc,
 			errFmtSvc, &unitConfig{
