@@ -1,8 +1,6 @@
 # Change Log
 
 ## [v0.0.8] - 15.03.2025
-### Added
-* Added Helm Job chart
 ### Changed
 * Added support of Go 1.23
 * Updated License
