@@ -1,6 +1,6 @@
 # Change Log
 
-## [v0.0.8] - 15.03.2025
+## [v0.0.8, v0.0.9] - 15.03.2025
 ### Changed
 * Added support of Go 1.23
 * Updated License
