@@ -2,12 +2,12 @@
 
 ## Description
 
-Library for manage healthcheck config prepare http-server with healthcheck handlers
+Library for manage healthcheck config and prepare http-server with healthcheck handlers
 
 Library contains:
 * Config structs and implementation of http-server for 3 healthcheck probes:
   * Startup
-  * Rediness 
+  * Readiness 
   * Liveness
 
 Each healthcheck probe it is http-server with uniq config and listen address/port.

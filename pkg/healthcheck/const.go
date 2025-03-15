@@ -1,9 +1,7 @@
 /*
- *
- *
  * MIT NON-AI License
  *
- * Copyright (c) 2022-2024 Aleksei Kotelnikov(gudron2s@gmail.com)
+ * Copyright (c) 2022-2025 Aleksei Kotelnikov(gudron2s@gmail.com)
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of the software and associated documentation files (the "Software"),
  * to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
@@ -36,11 +34,9 @@ const (
 	ListenAddressTag = "healthcheck_listen_address"
 	UnitNameTag      = "healthcheck_unit_name"
 
-	RecoveryErrTag   = "recovery_error"
-	RecoveryStackTag = "recovery_stack"
-	RecoveryTimeTag  = "recovery_time"
+	RecoveryErrTag  = "recovery_error"
+	RecoveryTimeTag = "recovery_time"
 
-	ProbeTypeTag        = "probe_type"
 	AppHealthyMessage   = "Ok"
 	AppUnHealthyMessage = "Failed"
 )

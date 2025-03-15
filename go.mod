@@ -1,3 +1,3 @@
 module github.com/crypto-bundle/bc-wallet-common-lib-healthcheck
 
-go 1.22
+go 1.23

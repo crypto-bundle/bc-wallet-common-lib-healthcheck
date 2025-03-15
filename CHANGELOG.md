@@ -1,5 +1,19 @@
 # Change Log
 
+## [v0.0.8] - 15.03.2025
+### Added
+* Added Helm Job chart
+### Changed
+* Added support of Go 1.23
+* Updated License
+  * Copyright - new year 2025
+  * Added License banner to *.go files
+* Added support of last version of lib-errors/lib-tinyerrors
+* Added linter and fixed up all linter issues
+* Added support of last common-lib-* versions:
+  * bc-wallet-common-lib-errors v0.0.10
+  * bc-wallet-common-lib-logger v0.0.12
+
 ## [v0.0.7] - 03.10.2024
 ### Added
 * Added linters checks:

@@ -1,9 +1,7 @@
 /*
- *
- *
  * MIT NON-AI License
  *
- * Copyright (c) 2022-2024 Aleksei Kotelnikov(gudron2s@gmail.com)
+ * Copyright (c) 2022-2025 Aleksei Kotelnikov(gudron2s@gmail.com)
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy of the software and associated documentation files (the "Software"),
  * to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
@@ -53,7 +51,7 @@ type probeUnit struct {
 func (s *probeUnit) ListenAndServe(ctx context.Context) error {
 	err := s.httpSrv.ListenAndServe()
 	if err != nil {
-		s.l.Error("unable to listen and serve http server", err)
+		s.l.Error("unable to listen and serve http server", slog.Any("error", err))
 
 		return s.e.ErrorOnly(err)
 	}
@@ -64,14 +62,14 @@ func (s *probeUnit) ListenAndServe(ctx context.Context) error {
 
 	err = s.httpSrv.Shutdown(ctx)
 	if err != nil {
-		s.l.Error("unable to shutdown http server", err)
+		s.l.Error("unable to shutdown http server", slog.Any("error", err))
 
 		return s.e.ErrorOnly(err)
 	}
 
 	err = s.httpSrv.Close()
 	if err != nil {
-		s.l.Error("unable to close http server", err)
+		s.l.Error("unable to close http server", slog.Any("error", err))
 
 		return s.e.ErrorOnly(err)
 	}
@@ -83,7 +81,7 @@ func (s *probeUnit) AddProbeUnit(unit probeService) {
 	s.probeHandler.AddProbe(unit)
 }
 
-func newHTPPHealthCheckerServer(logFactorySvc loggerService,
+func newHTPPHealthCheckerServer(logFactorySvc loggerBuilderService,
 	errFmtSvc errorFormatterService,
 	configSvc *unitConfig,
 ) *probeUnit {
