@@ -2,6 +2,8 @@
 
 ## Description
 
+**Go version**: 1.27
+
 Library for manage healthcheck config and prepare http-server with healthcheck handlers
 
 Library contains:

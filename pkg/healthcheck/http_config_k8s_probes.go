@@ -1,0 +1,122 @@
+/*
+ * MIT NON-AI License
+ *
+ * Copyright (c) 2022-2025 Aleksei Kotelnikov(gudron2s@gmail.com)
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of the software and associated documentation files (the "Software"),
+ * to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions.
+ *
+ * The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+ *
+ * In addition, the following restrictions apply:
+ *
+ * 1. The Software and any modifications made to it may not be used for the purpose of training or improving machine learning algorithms,
+ * including but not limited to artificial intelligence, natural language processing, or data mining. This condition applies to any derivatives,
+ * modifications, or updates based on the Software code. Any usage of the Software in an AI-training dataset is considered a breach of this License.
+ *
+ * 2. The Software may not be included in any dataset used for training or improving machine learning algorithms,
+ * including but not limited to artificial intelligence, natural language processing, or data mining.
+ *
+ * 3. Any person or organization found to be in violation of these restrictions will be subject to legal action and may be held liable
+ * for any damages resulting from such use.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+ * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE
+ * OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ *
+ */
+
+package healthcheck
+
+import (
+	"fmt"
+	"time"
+)
+
+var _ configService = (*K8sProbesConfig)(nil)
+
+// K8sProbesConfig aggregates all three Kubernetes probe configurations.
+// Use this when you need full lifecycle management: startup, readiness, and liveness.
+//
+// Migration: replace `&HealthcheckHTTPConfig{}` with `&K8sProbesConfig{}`.
+type K8sProbesConfig struct {
+	*LivenessHTTPConfig
+	*ReadinessHTTPConfig
+	*StartupHTTPConfig
+}
+
+// GetStartupParams builds a unitConfig from the embedded StartupHTTPConfig values.
+func (c *K8sProbesConfig) GetStartupParams() *unitConfig {
+	return &unitConfig{
+		HTTPListenPort:   c.HealthCheckStartupHTTPPort,
+		HTTPReadTimeout:  c.HealthCheckStartupHTTPReadTimeout,
+		HTTPWriteTimeout: c.HealthCheckStartupHTTPWriteTimeout,
+		HTTPPath:         c.HealthCheckStartupHTTPPath,
+		ProbeName:        ProbeNameStartup,
+	}
+}
+
+// GetReadinessParams builds a unitConfig from the embedded ReadinessHTTPConfig values.
+func (c *K8sProbesConfig) GetReadinessParams() *unitConfig {
+	return &unitConfig{
+		HTTPListenPort:   c.HealthCheckReadinessHTTPPort,
+		HTTPReadTimeout:  c.HealthCheckReadinessHTTPReadTimeout,
+		HTTPWriteTimeout: c.HealthCheckReadinessHTTPWriteTimeout,
+		HTTPPath:         c.HealthCheckReadinessHTTPPath,
+		ProbeName:        ProbeNameRediness,
+	}
+}
+
+// GetLivenessParams builds a unitConfig from the embedded LivenessHTTPConfig values.
+func (c *K8sProbesConfig) GetLivenessParams() *unitConfig {
+	return &unitConfig{
+		HTTPListenPort:   c.HealthCheckLivenessHTTPPort,
+		HTTPReadTimeout:  c.HealthCheckLivenessHTTPReadTimeout,
+		HTTPWriteTimeout: c.HealthCheckLivenessHTTPWriteTimeout,
+		HTTPPath:         c.HealthCheckLivenessHTTPPath,
+		ProbeName:        ProbeNameLiveness,
+	}
+}
+
+// Prepare initializes the configuration (no-op placeholder).
+func (c *K8sProbesConfig) Prepare() error {
+	return nil
+}
+
+// PrepareWith initializes the configuration from a list of config services (no-op placeholder).
+func (c *K8sProbesConfig) PrepareWith(cfgSrvList ...interface{}) error {
+	return nil
+}
+
+// --- Shared internal type ---
+
+// unitConfig carries parameters extracted from a probe configuration for server instantiation.
+type unitConfig struct {
+	HTTPPath         string
+	ProbeName        string
+	HTTPListenPort   uint
+	HTTPReadTimeout  time.Duration
+	HTTPWriteTimeout time.Duration
+}
+
+func (p *unitConfig) GetListenAddress() string {
+	return fmt.Sprintf(":%d", p.HTTPListenPort)
+}
+
+func (p *unitConfig) GetHTTPReadTimeout() time.Duration {
+	return p.HTTPReadTimeout
+}
+
+func (p *unitConfig) GetHTTPWriteTimeout() time.Duration {
+	return p.HTTPWriteTimeout
+}
+
+func (p *unitConfig) GetRequestURL() string {
+	return p.HTTPPath
+}
+
+func (p *unitConfig) GetProbeName() string {
+	return p.ProbeName
+}

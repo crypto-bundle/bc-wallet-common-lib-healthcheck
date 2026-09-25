@@ -1,0 +1,8 @@
+.git/
+.agents/
+.idea/
+.vscode/
+*.pid
+*.sum~
+coverage.txt
+*.log
