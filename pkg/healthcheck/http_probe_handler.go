@@ -31,43 +31,61 @@
 package healthcheck
 
 import (
+	"context"
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"sync"
 )
 
+// probeWorker abstracts probe execution strategies (sync vs async).
+type probeWorker interface {
+	RegisterUnit(name string, unit probeService)
+	Execute(ctx context.Context) *ProbeExecutionResult
+}
+
 type httpHandler struct {
-	l *slog.Logger
-
-	probes []probeService
-
-	mu sync.RWMutex
+	l      *slog.Logger
+	e      errorFormatterService
+	worker probeWorker
+	mu     sync.RWMutex
 }
 
 func (h *httpHandler) AddProbe(svc probeService) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
+	h.worker.RegisterUnit(ProbeNameUnsupported, svc)
+}
 
-	h.probes = append(h.probes, svc)
+func (h *httpHandler) AddProbeWithName(name string, svc probeService) {
+	h.worker.RegisterUnit(name, svc)
 }
 
 func (h *httpHandler) ServeHTTP(respWriter http.ResponseWriter, httpReq *http.Request) {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
+	result := h.worker.Execute(httpReq.Context())
 
-	var isHealed = true
+	status := http.StatusOK
+	message := AppHealthyMessage
 
-	for i := 0; i != len(h.probes); i++ {
-		isHealed = isHealed && h.probes[i].IsHealed(httpReq.Context())
+	if !result.AllHealthy() {
+		status = http.StatusTeapot
+		message = AppUnHealthyMessage
 	}
 
-	if isHealed {
-		h.writeResponse(respWriter, http.StatusOK, AppHealthyMessage)
-
-		return
+	respBody := struct {
+		Status  int               `json:"status"`
+		Message string            `json:"message"`
+		Result  *ProbeExecutionResult `json:"result"`
+	}{
+		Status:  status,
+		Message: message,
+		Result:  result,
 	}
 
-	h.writeResponse(respWriter, http.StatusTeapot, AppUnHealthyMessage)
+	respWriter.Header().Add("Content-Type", "application/json")
+	respWriter.WriteHeader(status)
+
+	encoder := json.NewEncoder(respWriter)
+	encoder.SetIndent("", "  ")
+	_ = encoder.Encode(&respBody)
 }
 
 func (h *httpHandler) writeResponse(respWriter http.ResponseWriter,
@@ -86,11 +104,10 @@ func (h *httpHandler) writeResponse(respWriter http.ResponseWriter,
 	}
 }
 
-func newHTTPHandler(logger *slog.Logger) *httpHandler {
+func newHTTPHandler(logger *slog.Logger, errFmt errorFormatterService) *httpHandler {
 	return &httpHandler{
-		mu: sync.RWMutex{},
-
 		l:      logger,
-		probes: nil,
+		e:      errFmt,
+		worker: newProbeWorkerSync(logger, errFmt),
 	}
 }

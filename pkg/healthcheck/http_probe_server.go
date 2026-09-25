@@ -92,7 +92,7 @@ func newHTPPHealthCheckerServer(logFactorySvc loggerBuilderService,
 	mux := http.NewServeMux()
 
 	httpMiddleware := newMiddleware(logger)
-	handler := newHTTPHandler(logger)
+	handler := newHTTPHandler(logger, errFmtSvc)
 	handlerWithMiddleware := httpMiddleware.With(handler).
 		With(newRecoveryMiddleware(logger))
 

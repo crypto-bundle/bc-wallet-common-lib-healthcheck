@@ -38,8 +38,6 @@ import (
 )
 
 type configService interface {
-	IsDebug() bool
-
 	IsLivenessProbeEnable() bool
 	GetLivenessListenAddress() string
 	GetLivenessProbeRequestPath() string
@@ -64,6 +62,8 @@ type configService interface {
 
 type probeService interface {
 	IsHealed(ctx context.Context) bool
+	IsReady(ctx context.Context) bool
+	Run(ctx context.Context) error
 }
 
 type probeHTTPServer interface {
