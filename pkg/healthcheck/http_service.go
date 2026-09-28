@@ -126,8 +126,9 @@ func NewHTTPHealthChecker(
 	cfgSvc configService,
 ) *httpHealthChecker {
 	healthChecker := &httpHealthChecker{
-		l: logger,
-		e: errFmtSvc,
+		l:      logger,
+		e:      errFmtSvc,
+		cfgSvc: cfgSvc,
 
 		probes: [ProbeIndexMaxValuePlaceholder]probeHTTPServer{},
 	}

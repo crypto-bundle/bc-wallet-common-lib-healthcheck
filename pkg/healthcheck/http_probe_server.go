@@ -86,11 +86,11 @@ func newHTPProbeCheckerServer(
 
 	mux := http.NewServeMux()
 
-	httpMiddleware := newMiddleware(logger)
+	httpMiddleware := newMiddleware(errFmtSvc, logger)
 	handler := newHTTPHandler(errFmtSvc, logger, statesSvc)
 
 	handlerWithMiddleware := httpMiddleware.With(handler).
-		With(newRecoveryMiddleware(logger))
+		With(newRecoveryMiddleware(errFmtSvc, logger))
 
 	mux.Handle(configSvc.GetRequestURL(), handlerWithMiddleware.GetHTTPHandler())
 

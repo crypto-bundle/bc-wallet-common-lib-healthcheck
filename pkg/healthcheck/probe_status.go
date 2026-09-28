@@ -7,5 +7,5 @@ package healthcheck
 // easyjson:json
 type ProbeUnitStatusReport struct {
 	Status probeUnitStatus            `json:"name"`
-	States map[string]ProbeUnitResult `json:"states"`
+	States map[string]ProbeUnitResult `json:"states,omitempty"`
 }

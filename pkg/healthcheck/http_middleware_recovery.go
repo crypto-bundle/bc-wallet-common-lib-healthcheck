@@ -42,8 +42,8 @@ var (
 )
 
 type middleware struct {
-	e      errorFormatterService
-	logger *log.Logger
+	e errorFormatterService
+	l *log.Logger
 
 	httpHandler http.Handler
 }
@@ -53,9 +53,13 @@ type middlewareRecovery struct {
 	l *log.Logger
 }
 
-func newRecoveryMiddleware(l *log.Logger) *middlewareRecovery {
+func newRecoveryMiddleware(
+	errFmtSvc errorFormatterService,
+	logger *log.Logger,
+) *middlewareRecovery {
 	return &middlewareRecovery{
-		l: l,
+		l: logger,
+		e: errFmtSvc,
 	}
 }
 
@@ -91,9 +95,13 @@ func (m *middleware) GetHTTPHandler() http.Handler {
 	return m.httpHandler
 }
 
-func newMiddleware(l *log.Logger) *middleware {
+func newMiddleware(
+	errFmtSvc errorFormatterService,
+	logger *log.Logger,
+) *middleware {
 	return &middleware{
-		logger:      l,
+		l:           logger,
+		e:           errFmtSvc,
 		httpHandler: nil,
 	}
 }

@@ -33,7 +33,6 @@ package healthcheck
 import (
 	"log"
 	"net/http"
-	"sync"
 
 	"github.com/mailru/easyjson"
 )
@@ -43,7 +42,6 @@ type httpHandler struct {
 	e errorFormatterService
 
 	worker probeStatesService
-	mu     sync.RWMutex
 }
 
 func (h *httpHandler) ServeHTTP(respWriter http.ResponseWriter, httpReq *http.Request) {
