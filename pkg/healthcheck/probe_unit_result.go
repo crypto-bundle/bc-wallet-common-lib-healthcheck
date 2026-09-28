@@ -38,6 +38,7 @@ package healthcheck
 type ProbeUnitResult struct {
 	Name    string `json:"name"`
 	Message string `json:"message"`
+	Code    uint16 `json:"code"`
 
 	err        error `json:"-"`
 	isRequired bool  `json:"-"`
@@ -47,6 +48,7 @@ func (r *ProbeUnitResult) Clone() ProbeUnitResult {
 	return ProbeUnitResult{
 		Name:    r.Name,
 		Message: r.Message,
+		Code:    r.Code,
 
 		err:        r.err,
 		isRequired: r.isRequired,

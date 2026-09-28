@@ -45,20 +45,25 @@ var _ probeStatesService = (*probeStatesUnit)(nil)
 // probeStateUnit executes probe units sequentially until all pass or one fails (fail-fast).
 type probeStatesUnit struct {
 	mu *sync.RWMutex
+	e  errorFormatterService
 
 	mustBeSuccess []string
 
-	status probeUnitStasus
+	status probeUnitStatus
 	states map[string]*ProbeUnitResult
 }
 
-func NewProbeStateUnit(requiredStateFields ...string) *probeStatesUnit {
+func NewProbeStateUnit(
+	errFmtSvc errorFormatterService,
+	requiredStateFields ...string,
+) *probeStatesUnit {
 	statesMap := make(map[string]*ProbeUnitResult, len(requiredStateFields))
 
 	for _, v := range requiredStateFields {
 		statesMap[v] = &ProbeUnitResult{
 			Name:    v,
 			Message: "",
+			Code:    uint16(MessageCodeEverythingOK),
 
 			err:        nil,
 			isRequired: true,
@@ -67,6 +72,7 @@ func NewProbeStateUnit(requiredStateFields ...string) *probeStatesUnit {
 
 	return &probeStatesUnit{
 		mu: &sync.RWMutex{},
+		e:  errFmtSvc,
 
 		status:        ProbeUnitStatusSuccess,
 		mustBeSuccess: requiredStateFields,
@@ -147,6 +153,7 @@ func (w *probeStatesUnit) SetStateMessage(name string, mesage string) {
 		w.states[name] = &ProbeUnitResult{
 			Name:    name,
 			Message: mesage,
+			Code:    uint16(MessageCodeEverythingOK),
 
 			err:        nil,
 			isRequired: false,
@@ -164,35 +171,47 @@ func (w *probeStatesUnit) SetStateError(name string, err error) {
 
 	el, ok := w.states[name]
 
-	switch true {
-	case !ok && err == nil:
-		el = &ProbeUnitResult{
-			Name:    name,
-			Message: err.Error(),
-
+	switch {
+	case !ok && err != nil:
+		// New required-field entry arriving with an error — create it.
+		w.states[name] = &ProbeUnitResult{
+			Name:       name,
+			Message:    err.Error(),
+			Code:       uint16(w.e.ErrGetCode(err)),
 			err:        err,
-			isRequired: false,
+			isRequired: true,
 		}
 
-		w.states[name] = el
+		w.recalculateStatusLocked()
 
 	case !ok && err == nil:
-		el = &ProbeUnitResult{
-			Name:    name,
-			Message: "",
-
-			err:        nil,
-			isRequired: false,
-		}
-
-		w.states[name] = el
+		// No-op: do not fabricate entries when caller passes nil error.
+		return
 
 	case ok && err != nil:
 		el.Message = err.Error()
+		el.Code = uint16(w.e.ErrGetCode(err))
 		el.err = err
+
+		w.recalculateStatusLocked()
 
 	case ok && err == nil:
 		el.Message = ""
+		el.Code = uint16(w.e.ErrGetCode(err))
 		el.err = nil
+
+		w.recalculateStatusLocked()
 	}
+}
+
+func (w *probeStatesUnit) recalculateStatusLocked() {
+	for _, r := range w.states {
+		if r.isRequired && r.err != nil {
+			w.status = ProbeUnitStatusFailed
+
+			return
+		}
+	}
+
+	w.status = ProbeUnitStatusSuccess
 }

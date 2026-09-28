@@ -4,6 +4,7 @@ package healthcheck
 
 import (
 	json "encoding/json"
+
 	easyjson "github.com/mailru/easyjson"
 	jlexer "github.com/mailru/easyjson/jlexer"
 	jwriter "github.com/mailru/easyjson/jwriter"
@@ -35,7 +36,7 @@ func easyjsonE0099477DecodeGithubComCryptoBundleBcWalletCommonLibHealthcheckPkgH
 			if in.IsNull() {
 				in.Skip()
 			} else {
-				out.Status = probeUnitStasus(in.Uint8())
+				out.Status = probeUnitStatus(in.Uint8())
 			}
 		case "states":
 			if in.IsNull() {

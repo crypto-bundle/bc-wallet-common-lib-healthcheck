@@ -64,10 +64,16 @@ func (i *ProbeIndex) String() string {
 	}
 }
 
-type probeUnitStasus uint8
+type MessageCode uint16
 
 const (
-	ProbeUnitStatusFailed probeUnitStasus = iota + 1
+	MessageCodeEverythingOK MessageCode = 0
+)
+
+type probeUnitStatus uint8
+
+const (
+	ProbeUnitStatusFailed probeUnitStatus = iota + 1
 	ProbeUnitStatusSuccess
 )
 
@@ -77,7 +83,7 @@ const (
 	ProbeUnitStatusMissingName = "<nil>"
 )
 
-func (i probeUnitStasus) String() string {
+func (i probeUnitStatus) String() string {
 	switch i {
 	case ProbeUnitStatusFailed:
 		return ProbeUnitStatusFailedName
