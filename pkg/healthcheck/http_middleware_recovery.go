@@ -33,9 +33,8 @@ package healthcheck
 import (
 	"errors"
 	"fmt"
-	"log/slog"
+	"log"
 	"net/http"
-	"time"
 )
 
 var (
@@ -43,15 +42,18 @@ var (
 )
 
 type middleware struct {
-	logger      *slog.Logger
+	e      errorFormatterService
+	logger *log.Logger
+
 	httpHandler http.Handler
 }
 
 type middlewareRecovery struct {
-	l *slog.Logger
+	e errorFormatterService
+	l *log.Logger
 }
 
-func newRecoveryMiddleware(l *slog.Logger) *middlewareRecovery {
+func newRecoveryMiddleware(l *log.Logger) *middlewareRecovery {
 	return &middlewareRecovery{
 		l: l,
 	}
@@ -60,6 +62,7 @@ func newRecoveryMiddleware(l *slog.Logger) *middlewareRecovery {
 func (m *middlewareRecovery) ServeHTTP(respWriter http.ResponseWriter, _ *http.Request) {
 	defer func() {
 		recoverErr := recover()
+
 		if recoverErr != nil {
 			respWriter.WriteHeader(http.StatusInternalServerError)
 			respWriter.Header().Add("Content-Type", "text/plain")
@@ -68,15 +71,10 @@ func (m *middlewareRecovery) ServeHTTP(respWriter http.ResponseWriter, _ *http.R
 
 			_, writeErr := respWriter.Write([]byte(respText))
 			if writeErr != nil {
-				m.l.Error("unable to write response", slog.Any("error", writeErr),
-					slog.Time(RecoveryTimeTag, time.Now()),
-				)
+				m.l.Printf("unable to write response: %e\n", writeErr)
 			}
 
-			m.l.Error("called recovery flow", slog.Any("error", ErrHealthCheckRecovery),
-				slog.Any(RecoveryErrTag, recoverErr),
-				slog.Time(RecoveryTimeTag, time.Now()),
-			)
+			m.l.Printf("called recovery flow: %s", respText)
 		}
 	}()
 }
@@ -93,7 +91,7 @@ func (m *middleware) GetHTTPHandler() http.Handler {
 	return m.httpHandler
 }
 
-func newMiddleware(l *slog.Logger) *middleware {
+func newMiddleware(l *log.Logger) *middleware {
 	return &middleware{
 		logger:      l,
 		httpHandler: nil,

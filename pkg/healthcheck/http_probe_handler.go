@@ -31,61 +31,34 @@
 package healthcheck
 
 import (
-	"context"
-	"encoding/json"
-	"log/slog"
+	"log"
 	"net/http"
 	"sync"
+
+	"github.com/mailru/easyjson"
 )
 
-// probeWorker abstracts probe execution strategies (sync vs async).
-type probeWorker interface {
-	RegisterUnit(name string, unit probeService)
-	Execute(ctx context.Context) *ProbeExecutionResult
-}
-
 type httpHandler struct {
-	l      *slog.Logger
-	e      errorFormatterService
-	worker probeWorker
+	l *log.Logger
+	e errorFormatterService
+
+	worker probeStatesService
 	mu     sync.RWMutex
 }
 
-func (h *httpHandler) AddProbe(svc probeService) {
-	h.worker.RegisterUnit(ProbeNameUnsupported, svc)
-}
-
-func (h *httpHandler) AddProbeWithName(name string, svc probeService) {
-	h.worker.RegisterUnit(name, svc)
-}
-
 func (h *httpHandler) ServeHTTP(respWriter http.ResponseWriter, httpReq *http.Request) {
-	result := h.worker.Execute(httpReq.Context())
+	respData := h.worker.GetStatus()
 
 	status := http.StatusOK
-	message := AppHealthyMessage
 
-	if !result.AllHealthy() {
+	if respData.Status == ProbeUnitStatusFailed {
 		status = http.StatusTeapot
-		message = AppUnHealthyMessage
-	}
-
-	respBody := struct {
-		Status  int               `json:"status"`
-		Message string            `json:"message"`
-		Result  *ProbeExecutionResult `json:"result"`
-	}{
-		Status:  status,
-		Message: message,
-		Result:  result,
 	}
 
 	respWriter.Header().Add("Content-Type", "application/json")
 	respWriter.WriteHeader(status)
 
-	encoder := json.NewEncoder(respWriter)
-	encoder.SetIndent("", "  ")
-	_ = encoder.Encode(&respBody)
+	easyjson.MarshalToWriter(respData, respWriter)
 }
 
 func (h *httpHandler) writeResponse(respWriter http.ResponseWriter,
@@ -97,17 +70,20 @@ func (h *httpHandler) writeResponse(respWriter http.ResponseWriter,
 
 	_, writeErr := respWriter.Write([]byte(message))
 	if writeErr != nil {
-		h.l.Error("unable to write http probe response",
-			slog.Any("error", writeErr))
+		h.l.Printf("unable to write http probe response: %e", writeErr)
 
 		return
 	}
 }
 
-func newHTTPHandler(logger *slog.Logger, errFmt errorFormatterService) *httpHandler {
+func newHTTPHandler(
+	errFmt errorFormatterService,
+	logger *log.Logger,
+	statesUnit probeStatesService,
+) *httpHandler {
 	return &httpHandler{
 		l:      logger,
 		e:      errFmt,
-		worker: newProbeWorkerSync(logger, errFmt),
+		worker: statesUnit,
 	}
 }

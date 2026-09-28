@@ -33,18 +33,21 @@ package healthcheck
 import (
 	"context"
 	"errors"
-	"log/slog"
+	"log"
 )
 
 var (
-	ErrProbeTypeNotEnabled = errors.New("healthcheck probe not enabled")
+	ErrProbeTypeNotEnabled = errors.New("probe not enabled")
+	ErrProbeAlreadySettled = errors.New("probe already settled")
 )
 
 type httpHealthChecker struct {
-	l *slog.Logger
+	l *log.Logger
 	e errorFormatterService
 
-	probes [3]probeHTTPServer // liveness, rediness, startup
+	cfgSvc configService
+
+	probes [5]probeHTTPServer // liveness, rediness, startup, healthcheck, ping
 }
 
 func (s *httpHealthChecker) ListenAndServe(ctx context.Context) error {
@@ -56,91 +59,76 @@ func (s *httpHealthChecker) ListenAndServe(ctx context.Context) error {
 		go func(probeSrv probeHTTPServer) {
 			err := probeSrv.ListenAndServe(ctx)
 			if err != nil {
-				s.l.Error("unable to start listen and server process for probe",
-					slog.Any("errors", err))
+				s.l.Printf("unable to start listen and server process for probe: %e\n", err)
 			}
 		}(probe)
 	}
 
-	s.l.Info("all probes successfully listen up")
+	s.l.Println("all probes successfully listen up")
 
 	return nil
 }
 
-func (s *httpHealthChecker) AddLivenessProbeUnit(probe probeService) error {
-	if s.probes[LivenessProbeIndex] == nil {
+func (s *httpHealthChecker) AddLivenessProbeChecker(checkerConfigSvc probeCheckerConfigService,
+	probeStatesSvc probeStatesService,
+) error {
+	if !s.cfgSvc.IsLivenessProbeEnable() {
 		return s.e.ErrorOnly(ErrProbeTypeNotEnabled)
 	}
 
-	s.probes[LivenessProbeIndex].AddProbeUnit(probe)
+	if s.probes[LivenessProbeIndex] != nil {
+		return s.e.ErrorOnly(ErrProbeAlreadySettled)
+	}
+
+	s.probes[LivenessProbeIndex] = newHTPProbeCheckerServer(s.e, s.l, checkerConfigSvc, probeStatesSvc)
 
 	return nil
 }
 
-func (s *httpHealthChecker) AddRedinessProbeUnit(probe probeService) error {
-	if s.probes[RedinessProbeIndex] == nil {
+func (s *httpHealthChecker) AddRedinessProbeUnit(
+	checkerConfigSvc probeCheckerConfigService,
+	probeStatesSvc probeStatesService,
+) error {
+	if !s.cfgSvc.IsReadinessProbeEnable() {
 		return s.e.ErrorOnly(ErrProbeTypeNotEnabled)
 	}
 
-	s.probes[RedinessProbeIndex].AddProbeUnit(probe)
+	if s.probes[RedinessProbeIndex] != nil {
+		return s.e.ErrorOnly(ErrProbeAlreadySettled)
+	}
+
+	s.probes[RedinessProbeIndex] = newHTPProbeCheckerServer(s.e, s.l, checkerConfigSvc, probeStatesSvc)
 
 	return nil
 }
 
-func (s *httpHealthChecker) AddStartupProbeUnit(probe probeService) error {
-	if s.probes[StartupProbeIndex] == nil {
+func (s *httpHealthChecker) AddStartupProbeUnit(
+	checkerConfigSvc probeCheckerConfigService,
+	probeStatesSvc probeStatesService,
+) error {
+	if !s.cfgSvc.IsStartupProbeEnable() {
 		return s.e.ErrorOnly(ErrProbeTypeNotEnabled)
 	}
 
-	s.probes[StartupProbeIndex].AddProbeUnit(probe)
+	if s.probes[StartupProbeIndex] != nil {
+		return s.e.ErrorOnly(ErrProbeAlreadySettled)
+	}
+
+	s.probes[StartupProbeIndex] = newHTPProbeCheckerServer(s.e, s.l, checkerConfigSvc, probeStatesSvc)
 
 	return nil
 }
 
-func NewHTTPHealthChecker(logFactorySvc loggerBuilderService,
+func NewHTTPHealthChecker(
 	errFmtSvc errorFormatterService,
+	logger *log.Logger,
 	cfgSvc configService,
 ) *httpHealthChecker {
-	probes := [ProbeIndexMaxValuePlaceholder]probeHTTPServer{}
-
-	if cfgSvc.IsStartupProbeEnable() {
-		probes[StartupProbeIndex] = newHTPPHealthCheckerServer(logFactorySvc,
-			errFmtSvc, &unitConfig{
-				HTTPListenPort:   cfgSvc.GetStartupProbeListenPort(),
-				HTTPReadTimeout:  cfgSvc.GetStartupProbeReadTimeout(),
-				HTTPWriteTimeout: cfgSvc.GetStartupProbeWriteTimeout(),
-				HTTPPath:         cfgSvc.GetStartupProbeRequestPath(),
-				ProbeName:        ProbeNameStartup,
-			})
-	}
-
-	if cfgSvc.IsReadinessProbeEnable() {
-		probes[RedinessProbeIndex] = newHTPPHealthCheckerServer(logFactorySvc,
-			errFmtSvc, &unitConfig{
-				HTTPListenPort:   cfgSvc.GetReadinessProbeListenPort(),
-				HTTPReadTimeout:  cfgSvc.GetReadinessProbeReadTimeout(),
-				HTTPWriteTimeout: cfgSvc.GetReadinessProbeWriteTimeout(),
-				HTTPPath:         cfgSvc.GetReadinessProbeRequestPath(),
-				ProbeName:        ProbeNameRediness,
-			})
-	}
-
-	if cfgSvc.IsLivenessProbeEnable() {
-		probes[LivenessProbeIndex] = newHTPPHealthCheckerServer(logFactorySvc,
-			errFmtSvc, &unitConfig{
-				HTTPListenPort:   cfgSvc.GetLivenessProbeListenPort(),
-				HTTPReadTimeout:  cfgSvc.GetLivenessProbeReadTimeout(),
-				HTTPWriteTimeout: cfgSvc.GetLivenessProbeWriteTimeout(),
-				HTTPPath:         cfgSvc.GetLivenessProbeRequestPath(),
-				ProbeName:        ProbeNameLiveness,
-			})
-	}
-
 	healthChecker := &httpHealthChecker{
-		l: logFactorySvc.NewSlogNamedLoggerEntry("healthcheck"),
+		l: logger,
 		e: errFmtSvc,
 
-		probes: probes,
+		probes: [ProbeIndexMaxValuePlaceholder]probeHTTPServer{},
 	}
 
 	return healthChecker

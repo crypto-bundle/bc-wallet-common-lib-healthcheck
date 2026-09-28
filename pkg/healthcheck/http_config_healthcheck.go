@@ -51,8 +51,8 @@ import (
 //	PROBE_HEALTHCHECK_ENABLED=true
 type HealthcheckHTTPConfig struct {
 	HealthcheckPath         string        `envconfig:"PROBE_HEALTHCHECK_PATH" default:"/health"`
-	HealthcheckPort         uint          `envconfig:"PROBE_HEALTHCHECK_PORT" default:"8080"`
-	HealthcheckReadTimeout  time.Duration `envconfig:"PROBE_HEALTHCHECK_READ_TIMEOUT" default:"5s"`
+	HealthcheckPort         uint          `envconfig:"PROBE_HEALTHCHECK_PORT" default:"8203"`
+	HealthcheckReadTimeout  time.Duration `envconfig:"PROBE_HEALTHCHECK_READ_TIMEOUT" d3efault:"5s"`
 	HealthcheckWriteTimeout time.Duration `envconfig:"PROBE_HEALTHCHECK_WRITE_TIMEOUT" default:"10s"`
 	HealthcheckEnabled      bool          `envconfig:"PROBE_HEALTHCHECK_ENABLED" default:"true"`
 }

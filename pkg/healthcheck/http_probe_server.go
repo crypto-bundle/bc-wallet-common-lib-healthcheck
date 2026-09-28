@@ -32,15 +32,15 @@ package healthcheck
 
 import (
 	"context"
-	"log/slog"
+	"log"
 	"net/http"
 )
 
 type probeUnit struct {
-	l *slog.Logger
+	l *log.Logger
 	e errorFormatterService
 
-	cfg *unitConfig
+	cfg probeCheckerConfigService
 
 	httpSrv      *http.Server
 	probeHandler *httpHandler
@@ -51,25 +51,25 @@ type probeUnit struct {
 func (s *probeUnit) ListenAndServe(ctx context.Context) error {
 	err := s.httpSrv.ListenAndServe()
 	if err != nil {
-		s.l.Error("unable to listen and serve http server", slog.Any("error", err))
+		s.l.Printf("unable to listen and serve http server: %e\n", err)
 
 		return s.e.ErrorOnly(err)
 	}
 
-	s.l.Info("healthcheck probe server run successfully")
+	s.l.Println("healthcheck probe server run successfully")
 
 	<-ctx.Done()
 
 	err = s.httpSrv.Shutdown(ctx)
 	if err != nil {
-		s.l.Error("unable to shutdown http server", slog.Any("error", err))
+		s.l.Printf("unable to shutdown http server: %e\n", err)
 
 		return s.e.ErrorOnly(err)
 	}
 
 	err = s.httpSrv.Close()
 	if err != nil {
-		s.l.Error("unable to close http server", slog.Any("error", err))
+		s.l.Printf("unable to shutdown http server: %e\n", err)
 
 		return s.e.ErrorOnly(err)
 	}
@@ -77,22 +77,18 @@ func (s *probeUnit) ListenAndServe(ctx context.Context) error {
 	return nil
 }
 
-func (s *probeUnit) AddProbeUnit(unit probeService) {
-	s.probeHandler.AddProbe(unit)
-}
-
-func newHTPPHealthCheckerServer(logFactorySvc loggerBuilderService,
+func newHTPProbeCheckerServer(
 	errFmtSvc errorFormatterService,
-	configSvc *unitConfig,
+	logger *log.Logger,
+	configSvc probeCheckerConfigService,
+	statesSvc probeStatesService,
 ) *probeUnit {
-	logger := logFactorySvc.NewSlogNamedLoggerEntry("healthcheck_unit",
-		slog.String(ListenAddressTag, configSvc.GetListenAddress()),
-		slog.String(UnitNameTag, configSvc.GetProbeName()))
 
 	mux := http.NewServeMux()
 
 	httpMiddleware := newMiddleware(logger)
-	handler := newHTTPHandler(logger, errFmtSvc)
+	handler := newHTTPHandler(errFmtSvc, logger, statesSvc)
+
 	handlerWithMiddleware := httpMiddleware.With(handler).
 		With(newRecoveryMiddleware(logger))
 
@@ -104,7 +100,7 @@ func newHTPPHealthCheckerServer(logFactorySvc loggerBuilderService,
 		Handler:      mux,
 		ReadTimeout:  configSvc.GetHTTPReadTimeout(),
 		WriteTimeout: configSvc.GetHTTPWriteTimeout(),
-		ErrorLog:     logFactorySvc.NewStdLoggerEntry(),
+		ErrorLog:     logger,
 	}
 
 	return &probeUnit{

@@ -36,6 +36,8 @@ const (
 	StartupProbeIndex ProbeIndex = iota
 	RedinessProbeIndex
 	LivenessProbeIndex
+	HealthCheckrobeIndex
+	PingProbeIndex
 	// ProbeIndexMaxValuePlaceholder is not a healthcheck probe index.
 	// It's just a const with count of all ProbeIndex's
 	// !!!WARNING: This const must be at last position of ProbeIndex const's block, don't change it.
@@ -59,5 +61,29 @@ func (i *ProbeIndex) String() string {
 		return ProbeNameLiveness
 	default:
 		return ProbeNameUnsupported
+	}
+}
+
+type probeUnitStasus uint8
+
+const (
+	ProbeUnitStatusFailed probeUnitStasus = iota + 1
+	ProbeUnitStatusSuccess
+)
+
+const (
+	ProbeUnitStatusFailedName  = "probe_failed"
+	ProbeUnitStatusSuccessName = "startup_checker_unit"
+	ProbeUnitStatusMissingName = "<nil>"
+)
+
+func (i probeUnitStasus) String() string {
+	switch i {
+	case ProbeUnitStatusFailed:
+		return ProbeUnitStatusFailedName
+	case ProbeUnitStatusSuccess:
+		return ProbeUnitStatusSuccessName
+	default:
+		return ProbeUnitStatusMissingName
 	}
 }

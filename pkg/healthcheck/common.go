@@ -35,7 +35,24 @@ import (
 	"log"
 	"log/slog"
 	"time"
+
+	_ "github.com/mailru/easyjson/gen"
 )
+
+type probeStatesService interface {
+	SetStateMessage(name string, mesage string)
+	SetStateError(name string, err error)
+
+	GetStatus() *ProbeUnitStatusReport
+}
+
+type probeCheckerConfigService interface {
+	GetListenAddress() string
+	GetHTTPReadTimeout() time.Duration
+	GetHTTPWriteTimeout() time.Duration
+	GetRequestURL() string
+	GetProbeName() string
+}
 
 type configService interface {
 	IsLivenessProbeEnable() bool
@@ -58,16 +75,23 @@ type configService interface {
 	GetStartupProbeReadTimeout() time.Duration
 	GetStartupProbeWriteTimeout() time.Duration
 	GetStartupProbeListenPort() uint
-}
 
-type probeService interface {
-	IsHealed(ctx context.Context) bool
-	IsReady(ctx context.Context) bool
-	Run(ctx context.Context) error
+	IsHealthcheckProbeEnable() bool
+	GetHealthcheckListenAddress() string
+	GetHealthcheckProbeRequestPath() string
+	GetHealthcheckProbeReadTimeout() time.Duration
+	GetHealthcheckProbeWriteTimeout() time.Duration
+	GetHealthcheckProbeListenPort() uint
+
+	IsPongProbeEnable() bool
+	GetPingListenAddress() string
+	GetPingProbeRequestPath() string
+	GetPingProbeReadTimeout() time.Duration
+	GetPingProbeWriteTimeout() time.Duration
+	GetPingProbeListenPort() uint
 }
 
 type probeHTTPServer interface {
-	AddProbeUnit(unit probeService)
 	ListenAndServe(ctx context.Context) error
 }
 
@@ -97,4 +121,13 @@ type errorFormatterService interface {
 	Errorf(err error, format string, args ...interface{}) error
 	NewError(details ...string) error
 	NewErrorf(format string, args ...interface{}) error
+}
+
+type baseConfigService interface {
+	IsProd() bool
+	IsStage() bool
+	IsTest() bool
+	IsDev() bool
+	IsDebug() bool
+	IsLocal() bool
 }

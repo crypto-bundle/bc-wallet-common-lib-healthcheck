@@ -2,8 +2,6 @@
 
 ## Description
 
-**Go version**: 1.27
-
 Library for manage healthcheck config and prepare http-server with healthcheck handlers
 
 Library contains:
@@ -11,6 +9,9 @@ Library contains:
   * Startup
   * Readiness 
   * Liveness
+  * Healthcheck
+  * Ping
+
 
 Each healthcheck probe it is http-server with uniq config and listen address/port.
 
