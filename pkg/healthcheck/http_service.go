@@ -69,7 +69,8 @@ func (s *httpHealthChecker) ListenAndServe(ctx context.Context) error {
 	return nil
 }
 
-func (s *httpHealthChecker) AddLivenessProbeChecker(checkerConfigSvc probeCheckerConfigService,
+func (s *httpHealthChecker) AddLivenessProbeChecker(
+	checkerConfigSvc probeCheckerConfigService,
 	probeStatesSvc probeStatesService,
 ) error {
 	if !s.cfgSvc.IsLivenessProbeEnable() {

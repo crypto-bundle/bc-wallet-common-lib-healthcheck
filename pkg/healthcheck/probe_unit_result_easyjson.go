@@ -43,6 +43,12 @@ func easyjson60bfa54fDecodeGithubComCryptoBundleBcWalletCommonLibHealthcheckPkgH
 			} else {
 				out.Message = string(in.String())
 			}
+		case "code":
+			if in.IsNull() {
+				in.Skip()
+			} else {
+				out.Code = uint16(in.Uint16())
+			}
 		default:
 			in.SkipRecursive()
 		}
@@ -66,6 +72,11 @@ func easyjson60bfa54fEncodeGithubComCryptoBundleBcWalletCommonLibHealthcheckPkgH
 		const prefix string = ",\"message\":"
 		out.RawString(prefix)
 		out.String(string(in.Message))
+	}
+	{
+		const prefix string = ",\"code\":"
+		out.RawString(prefix)
+		out.Uint16(uint16(in.Code))
 	}
 	out.RawByte('}')
 }

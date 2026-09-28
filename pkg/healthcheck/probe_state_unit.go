@@ -125,13 +125,7 @@ func (w *probeStatesUnit) GetStates() map[string]ProbeUnitResult {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 
-	res := make(map[string]ProbeUnitResult, len(w.states))
-
-	for k, v := range w.states {
-		res[k] = v.Clone()
-	}
-
-	return res
+	return w.getStates()
 }
 
 func (w *probeStatesUnit) getStates() map[string]ProbeUnitResult {
