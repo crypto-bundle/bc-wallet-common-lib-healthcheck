@@ -147,6 +147,9 @@ func (w *probeStatesUnit) SetStateMessage(name string, mesage string) {
 		w.states[name] = &ProbeUnitResult{
 			Name:    name,
 			Message: mesage,
+
+			err:        nil,
+			isRequired: false,
 		}
 
 		return
@@ -160,16 +163,36 @@ func (w *probeStatesUnit) SetStateError(name string, err error) {
 	defer w.mu.Unlock()
 
 	el, ok := w.states[name]
-	if !ok {
-		w.states[name] = &ProbeUnitResult{
+
+	switch true {
+	case !ok && err == nil:
+		el = &ProbeUnitResult{
 			Name:    name,
 			Message: err.Error(),
 
-			err: err,
+			err:        err,
+			isRequired: false,
 		}
 
-		return
-	}
+		w.states[name] = el
 
-	el.err = err
+	case !ok && err == nil:
+		el = &ProbeUnitResult{
+			Name:    name,
+			Message: "",
+
+			err:        nil,
+			isRequired: false,
+		}
+
+		w.states[name] = el
+
+	case ok && err != nil:
+		el.Message = err.Error()
+		el.err = err
+
+	case ok && err == nil:
+		el.Message = ""
+		el.err = nil
+	}
 }
