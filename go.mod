@@ -1,3 +1,7 @@
 module github.com/crypto-bundle/bc-wallet-common-lib-healthcheck
 
-go 1.23
+go 1.27
+
+require github.com/mailru/easyjson v0.9.2
+
+require github.com/josharian/intern v1.0.0 // indirect

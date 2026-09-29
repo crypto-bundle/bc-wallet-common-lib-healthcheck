@@ -1,0 +1,49 @@
+digraph Architecture {
+  rankdir=LR;
+  bgcolor="transparent";
+  fontname="Helvetica Neue";
+  labelloc="t";
+  labelfontname="Helvetica Neue";
+  labelfontsize=16;
+  label="HealthCheck Architecture";
+
+  node [fontname="Helvetica Neue", fontsize=12];
+  edge [fontname="Helvetica Neue", fontsize=10];
+
+  client [
+    label="HTTPClient"
+    shape=rect
+    style="rounded,filled"
+    fillcolor="#eaf2f8"
+    penwidth=2
+  ];
+
+  server [
+    label="HTTPProbeServer\n/ liveness · /readiness\n  /startup · /health · /ping"
+    shape=rect
+    style="rounded,filled"
+    fillcolor="#fef9e7"
+    penwidth=2
+  ];
+
+  state [
+    label="ProbeStateService\nGetStatus() · SetState*()"
+    shape=rect
+    style="rounded,filled"
+    fillcolor="#e8f8f5"
+    penwidth=2
+  ];
+
+  biz [
+    label="BusinessLogicService\nSetStateMessage()\nSetStateError()"
+    shape=rect
+    style="rounded,filled"
+    fillcolor="#f4ecf7"
+    penwidth=2
+  ];
+
+  client -> server [label="read"];
+  server -> state [label="READ\nGetStatus()"];
+  biz -> state [label="write\nSetState*()", arrowhead="normal", dir="forward"];
+
+}

@@ -1,5 +1,12 @@
 # Change Log
 
+## [v0.0.10] - 29.09.2026
+### Added
+* 5 separate monitoring checks (startup, readiness, liveness, general health, ping) — each runs independently with its own settings
+* Concurrent status reporting — multiple services can update probe results simultaneously without conflicts
+### Changed
+* Better error handling — internal failures return proper server errors instead of crashing the service
+
 ## [v0.0.8, v0.0.9] - 15.03.2025
 ### Changed
 * Added support of Go 1.23
