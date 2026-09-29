@@ -44,7 +44,7 @@
 // [probeStatesService] implementation serves only as a transient state storage layer.
 //
 // ```
-// HTTPProbeChecker (read) --> state managment service-component <-- (write) MonitorServiceComponent
+// HTTPProbeChecker (read) --> state management service-component <-- (write) MonitorServiceComponent
 // ```
 //
 // This read-only contract ensures the healthcheck library remains decoupled from business logic:
@@ -91,26 +91,33 @@
 //		log.Fatal(err)
 //	}
 //	checker := healthcheck.NewHTTPHealthChecker(errFmtSvc, logSvc, cfg)
-//	if err := checker.AddLivenessProbeUnit(livenessUnit); err != nil {
+//	if err := checker.AddLivenessProbeChecker(livenessCheckerCfg, livenessStates); err != nil {
 //		log.Printf("liveness: %v\n", err)
 //	}
-//	if err := checker.AddReadinessProbeUnit(readinessUnit); err != nil {
+//	if err := checker.AddRedinessProbeUnit(redinessCheckerCfg, redinessStates); err != nil {
 //		log.Printf("readiness: %v\n", err)
 //	}
-//	if err := checker.AddStartupProbeUnit(startupUnit); err != nil {
+//	if err := checker.AddStartupProbeUnit(startupCheckerCfg, startupStates); err != nil {
 //		log.Printf("startup: %v\n", err)
 //	}
 //	go checker.ListenAndServe(ctx)
 //
 // # Construction Flow
 //
-// To register health units:
+// To register probe checkers:
 //
 //	checker := healthcheck.NewHTTPHealthChecker(logger, errFmtSvc, cfg)
-//	checker.AddLivenessProbeUnit(unit)
-//	checker.AddReadinessProbeUnit(unit)
-//	checker.AddStartupProbeUnit(unit)
+//	checker.AddLivenessProbeChecker(checkerCfg, statesSvc)
+//	checker.AddRedinessProbeUnit(checkerCfg, statesSvc)
+//	checker.AddStartupProbeUnit(checkerCfg, statesSvc)
 //	checker.ListenAndServe(ctx)
+//
+// Each registration takes two parameters:
+//   - checkerConfigSvc (probeCheckerConfigService) — defines where the probe connects (address, timeouts, URL, name)
+//   - probeStatesSvc (probeStatesService) — write-accessible state store managed by external callers
+//
+// Registration returns [ErrProbeTypeNotEnabled] when the probe is disabled in config,
+// and [ErrProbeAlreadySettled] when a probe for the same index has already been registered.
 //
 // # Environment Variables
 //

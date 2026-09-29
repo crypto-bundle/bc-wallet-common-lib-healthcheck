@@ -1,5 +1,30 @@
 /*
- * MIT NON-AI License
+ MIT NON-AI License
+
+ Copyright (c) 2022-2026 Aleksei Kotelnikov(gudron2s@gmail.com)
+
+ Permission is hereby granted, free of charge, to any person obtaining a copy of the software and associated documentation files (the "Software"),
+ to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions.
+
+ The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+ In addition, the following restrictions apply:
+
+ 1. The Software and any modifications made to it may not be used for the purpose of training or improving machine learning algorithms,
+ including but not limited to artificial intelligence, natural language processing, or data mining. This condition applies to any derivatives,
+ modifications, or updates based on the Software code. Any usage of the Software in an AI-training dataset is considered a breach of this License.
+
+ 2. The Software may not be included in any dataset used for training or improving machine learning algorithms,
+ including but not limited to artificial intelligence, natural language processing, or data mining.
+
+ 3. Any person or organization found to be in violation of these restrictions will be subject to legal action and may be held liable
+ for any damages resulting from such use.
+
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE
+ OR THE USE OR OTHER DEALINGS IN THE SOFTWARE. MIT NON-AI License
  *
  * Copyright (c) 2022-2025 Aleksei Kotelnikov(gudron2s@gmail.com)
  *
@@ -26,7 +51,7 @@
  * DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE
  * OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  *
- */
+*/
 
 package healthcheck
 
@@ -48,32 +73,35 @@ var (
 // It provides deterministic error-to-code mapping so tests can assert on Code fields.
 type mockErrorFormatter struct{}
 
-func (m *mockErrorFormatter) ErrWithCode(err error, code int) error             { return nil }
-func (m *mockErrorFormatter) NewErrorWithCode(text string, code int) error     { return nil }
-func (m *mockErrorFormatter) ErrorGetCode(err error) int                       { return m.ErrGetCode(err) }
+func (m *mockErrorFormatter) ErrWithCode(err error, code int) error        { return nil }
+func (m *mockErrorFormatter) NewErrorWithCode(text string, code int) error { return nil }
+func (m *mockErrorFormatter) ErrorGetCode(err error) int                   { return m.ErrGetCode(err) }
 func (m *mockErrorFormatter) ErrGetCode(err error) int {
 	// Map known test errors to their expected uint16 codes; returns 0 for nil errors.
 	if err == nil {
 		return 0
 	}
-	if err == testErrDB {
+
+	if errors.Is(err, testErrDB) {
 		return int(mockErrCode)
 	}
-	if err == testErrTimeout {
+
+	if errors.Is(err, testErrTimeout) {
 		return int(mockErrCodeTMO)
 	}
+
 	return int(mockErrCode)
 }
 func (m *mockErrorFormatter) ErrorCodeIsOneOf(err error, codes ...int) (int, bool) { return 0, false }
 func (m *mockErrorFormatter) ErrCodeIsOneOf(err error, codes ...int) (int, bool)   { return 0, false }
-func (m *mockErrorFormatter) ErrorNoWrap(err error) error                         { return nil }
-func (m *mockErrorFormatter) ErrNoWrap(err error) error                           { return nil }
+func (m *mockErrorFormatter) ErrorNoWrap(err error) error                          { return nil }
+func (m *mockErrorFormatter) ErrNoWrap(err error) error                            { return nil }
 func (m *mockErrorFormatter) ErrorOnly(err error, details ...string) error         { return nil }
 func (m *mockErrorFormatter) Error(err error, details ...string) error             { return nil }
 func (m *mockErrorFormatter) Errorf(err error, format string, args ...interface{}) error {
 	return nil
 }
-func (m *mockErrorFormatter) NewError(details ...string) error           { return nil }
+func (m *mockErrorFormatter) NewError(details ...string) error { return nil }
 func (m *mockErrorFormatter) NewErrorf(format string, args ...interface{}) error {
 	return nil
 }
@@ -89,6 +117,7 @@ func newUnit(fields ...string) *probeStatesUnit {
 // Used to avoid repeating `unit.GetStatus()` + assertion boilerplate across test cases.
 func mustStatus(t *testing.T, unit *probeStatesUnit, expected probeUnitStatus, label string) {
 	t.Helper()
+
 	st := unit.GetStatus()
 	if st.Status != expected {
 		t.Errorf("[%s] expected %v, got %v", label, expected, st.Status)
@@ -109,6 +138,7 @@ func TestNewProbeStateUnit_InitialState(t *testing.T) {
 	if status.Status != ProbeUnitStatusSuccess {
 		t.Errorf("expected success, got %v", status.Status)
 	}
+
 	if len(status.States) != 2 {
 		t.Fatalf("expected 2 states, got %d", len(status.States))
 	}
@@ -117,17 +147,22 @@ func TestNewProbeStateUnit_InitialState(t *testing.T) {
 		state := unit.GetState(name)
 		if state == nil {
 			t.Errorf("expected state for %q, got nil", name)
+
 			continue
 		}
+
 		if state.Name != name {
 			t.Errorf("expected name %q, got %q", name, state.Name)
 		}
+
 		if !state.isRequired {
 			t.Errorf("expected isRequired=true for %q", name)
 		}
+
 		if state.err != nil {
 			t.Errorf("expected err=nil, got %v", state.err)
 		}
+
 		if state.Code != uint16(MessageCodeEverythingOK) {
 			t.Errorf("expected Code=%d, got %d", MessageCodeEverythingOK, state.Code)
 		}
@@ -145,6 +180,7 @@ func TestNewProbeStateUnit_EmptyFields(t *testing.T) {
 	if status.Status != ProbeUnitStatusSuccess {
 		t.Errorf("expected success, got %v", status.Status)
 	}
+
 	if len(status.States) != 0 {
 		t.Fatalf("expected empty states, got %d", len(status.States))
 	}
@@ -156,6 +192,7 @@ func TestNewProbeStateUnit_ErrFmtSvcStored(t *testing.T) {
 	// Confirms that errFmtSvc survives construction and is callable — without it,
 	// calling SetStateError would panic on a nil receiver dereference inside w.e.ErrGetCode().
 	svc := &mockErrorFormatter{}
+
 	unit := NewProbeStateUnit(svc, "field1")
 	if unit == nil {
 		t.Fatal("expected non-nil unit")
@@ -163,6 +200,7 @@ func TestNewProbeStateUnit_ErrFmtSvcStored(t *testing.T) {
 
 	// Exercises the service path: set error → verify Code was populated from ErrGetCode.
 	unit.SetStateError("field1", testErrDB)
+
 	state := unit.GetState("field1")
 	if state == nil || state.err == nil {
 		t.Error("expected error to be set")
@@ -207,13 +245,15 @@ func TestGetStatus_ConcurrentReaders(t *testing.T) {
 	unit := newUnit("field1", "field2")
 
 	var wg sync.WaitGroup
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+
 			_ = unit.GetStatus()
 		}()
 	}
+
 	wg.Wait()
 }
 
@@ -230,12 +270,15 @@ func TestGetState_Found(t *testing.T) {
 	if state == nil {
 		t.Fatal("expected state for existing key, got nil")
 	}
+
 	if state.Name != "myField" {
 		t.Errorf("expected name myField, got %s", state.Name)
 	}
+
 	if state.err != nil {
 		t.Errorf("expected err nil, got %v", state.err)
 	}
+
 	if !state.isRequired {
 		t.Error("expected isRequired true")
 	}
@@ -264,7 +307,8 @@ func TestGetState_IterationSafe(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 100; i++ {
+
+		for range 100 {
 			unit.SetStateMessage("shared", "reading")
 		}
 	}()
@@ -272,7 +316,8 @@ func TestGetState_IterationSafe(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		for i := 0; i < 100; i++ {
+
+		for range 100 {
 			_ = unit.GetState("shared")
 		}
 	}()
@@ -295,12 +340,15 @@ func TestGetStatesByNames_FilterExisting(t *testing.T) {
 	if len(result) != 2 {
 		t.Fatalf("expected 2 results, got %d", len(result))
 	}
+
 	if _, ok := result["missing"]; ok {
 		t.Error("unexpected 'missing' key in result")
 	}
+
 	if _, ok := result["a"]; !ok {
 		t.Error("expected 'a' key in result")
 	}
+
 	if _, ok := result["c"]; !ok {
 		t.Error("expected 'c' key in result")
 	}
@@ -358,6 +406,7 @@ func TestGetStates_ReturnsAll(t *testing.T) {
 	if len(states) != 2 {
 		t.Fatalf("expected 2 states, got %d", len(states))
 	}
+
 	for _, name := range expected {
 		if _, ok := states[name]; !ok {
 			t.Errorf("expected state %q in result", name)
@@ -390,10 +439,12 @@ func TestGetStates_EdgeEmpty(t *testing.T) {
 	// Ensures that a unit with zero initialized fields returns an empty-but-non-nil map.
 	// A nil return would cause panics in callers that range over it.
 	unit := newUnit() // no fields
+
 	states := unit.GetStates()
 	if states == nil {
 		t.Fatal("expected empty map, not nil")
 	}
+
 	if len(states) != 0 {
 		t.Errorf("expected 0 states, got %d", len(states))
 	}
@@ -436,6 +487,7 @@ func TestSetStateMessage_CreateOptionalEntry(t *testing.T) {
 	if state == nil {
 		t.Fatal("expected created state, got nil")
 	}
+
 	if state.Message != testFieldMessage {
 		t.Errorf("expected message %q, got %q", testFieldMessage, state.Message)
 	}
@@ -443,6 +495,7 @@ func TestSetStateMessage_CreateOptionalEntry(t *testing.T) {
 	if state.isRequired {
 		t.Error("expected isRequired=false for dynamically created entry")
 	}
+
 	if state.err != nil {
 		t.Error("expected err=nil for new message entry")
 	}
@@ -482,9 +535,11 @@ func TestSetStateError_NewFieldWithError(t *testing.T) {
 	if state == nil {
 		t.Fatal("expected created state, got nil")
 	}
-	if state.err != testErrDB {
+
+	if !errors.Is(state.err, testErrDB) {
 		t.Errorf("expected err=%v, got %v", testErrDB, state.err)
 	}
+
 	if state.Name != "new-dynamic" {
 		t.Errorf("expected name new-dynamic, got %s", state.Name)
 	}
@@ -492,6 +547,7 @@ func TestSetStateError_NewFieldWithError(t *testing.T) {
 	if state.Code != mockErrCode {
 		t.Errorf("expected Code=%d, got %d", mockErrCode, state.Code)
 	}
+
 	if !state.isRequired {
 		t.Error("expected isRequired=true for dynamic error entry")
 	}
@@ -529,12 +585,14 @@ func TestSetStateError_SetErrorOnExisting(t *testing.T) {
 	unit.SetStateError("target", testErrTimeout)
 
 	state := unit.GetState("target")
-	if state == nil || state.err != testErrTimeout {
+	if state == nil || !errors.Is(state.err, testErrTimeout) {
 		t.Fatal("expected error to be set on existing field")
 	}
+
 	if state.Message != testErrTimeout.Error() {
 		t.Errorf("expected Message=%q, got %q", testErrTimeout.Error(), state.Message)
 	}
+
 	if state.Code != mockErrCodeTMO {
 		t.Errorf("expected Code=%d, got %d", mockErrCodeTMO, state.Code)
 	}
@@ -559,9 +617,11 @@ func TestSetStateError_ClearErrorOnExisting(t *testing.T) {
 	if state.err != nil {
 		t.Errorf("expected err=nil after clear, got %v", state.err)
 	}
+
 	if state.Message != "" {
 		t.Errorf("expected empty message after clear, got %q", state.Message)
 	}
+
 	if state.Code != 0 {
 		t.Errorf("expected Code=0 after clear, got %d", state.Code)
 	}
@@ -614,6 +674,7 @@ func TestSetStateError_MultipleRequiredFailures(t *testing.T) {
 
 	detailed := unit.GetStatus()
 	failures := 0
+
 	for _, key := range []string{"a", "b", "c"} {
 		if st, ok := detailed.States[key]; ok && st.err != nil {
 			failures++
@@ -652,12 +713,14 @@ func TestSetStateError_OptionalDoesNotAffectStatus(t *testing.T) {
 	unit.SetStateError("must-fail", testErrDB)
 
 	unit.SetStateError("extra-optional", testErrTimeout)
+
 	status := unit.GetStatus()
 	if status.Status != ProbeUnitStatusFailed {
 		t.Errorf("optional error should not change already-Failed status")
 	}
 
 	unit.SetStateError("extra-optional", nil)
+
 	if unit.GetStatus().Status != ProbeUnitStatusFailed {
 		t.Error("removing optional error should not change Failed → Success")
 	}
@@ -678,11 +741,12 @@ func TestConcurrentReadWriteRaceDetector(t *testing.T) {
 	var wg sync.WaitGroup
 
 	// 10 readers — only read operations, no writes.
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			for j := 0; j < 50; j++ {
+
+			for range 50 {
 				_ = unit.GetStatus()
 				_ = unit.GetStates()
 				_ = unit.GetStatesByNames("concurrent-a", "concurrent-b")
@@ -692,30 +756,34 @@ func TestConcurrentReadWriteRaceDetector(t *testing.T) {
 	}
 
 	// 5 writers — messages only.
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
+
 			name := "concurrent-a"
 			if id%2 == 0 {
 				name = "concurrent-b"
 			}
-			for j := 0; j < 50; j++ {
+
+			for range 50 {
 				unit.SetStateMessage(name, "msg-"+string(rune(id)))
 			}
 		}(i)
 	}
 
 	// 5 writers — alternating SetStateError(set) / SetStateError(clear).
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
+
 			name := "concurrent-a"
 			if id%2 == 0 {
 				name = "concurrent-b"
 			}
-			for j := 0; j < 50; j++ {
+
+			for j := range 50 {
 				if j%2 == 0 {
 					unit.SetStateError(name, testErrDB)
 				} else {
