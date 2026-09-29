@@ -1,0 +1,69 @@
+@startuml
+skinparam backgroundColor white
+skinparam defaultFontName "Helvetica Neue"
+skinparam defaultFontSize 14
+skinparam rectangle {
+  RoundCorner 12
+  BackgroundColor White
+  BorderColor #2c3e50
+  ArrowColor #555
+  ArrowThinLine
+}
+
+title "HealthCheck Architecture — Component Interaction"
+
+package "HealthCheck Data Flow" #EEE8D3 {
+
+  actor "HTTPClient" as client <<boundary>>
+  participant "HTTPProbeServer" as server <<control>>
+  database "ProbeStateService" as state <<entity>>
+  actor "BusinessLogicService" as biz <<actor>>
+
+  == Request Path (read) ==
+
+  client -> server : HTTP GET\n/health/{liveness|readiness|\nstartup|health|ping}
+  note right of client
+    Client sends probe request
+    to any enabled endpoint
+  end note
+  server -> state : GetStatus()
+  note right of state
+    Read-only snapshot of all
+    registered unit results
+  end note
+  client <-- server : HTTP 200 OK
+  note left of server
+    Returns aggregated status +
+    per-unit states map
+  end note
+  client <-- server : HTTP 418
+  note left of server
+    Any required unit reports
+    failure → probe fails
+  end note
+
+  == State Write Path (write) ==
+
+  biz -> state : SetStateMessage(name, msg)
+  note right of state
+    Records a successful probe state
+    with human-readable message
+  end note
+  biz -> state : SetStateError(name, err)
+  note right of state
+    Records a failed state with
+    extracted error code
+  end note
+
+  == Shared Instance ==
+
+  state : *ProbeStatesUnit\n(sync.RWMutex protected)
+  note bottom of state
+    All components share the same
+    instance — injected at
+    construction time
+  end note
+
+}
+
+@enduml

@@ -1,157 +1,176 @@
-// Package healthcheck provides HTTP healthcheck probes for Kubernetes-style lifecycle management.
+// MIT NON-AI License
 //
-// It manages five probe types, each with its own HTTP server, listen address, and configuration:
-//   - Startup probe   (default :8202 /startup) — verifies application initialization
-//   - Readiness probe (default :8201 /readiness) — indicates whether the service can accept traffic
-//   - Liveness probe  (default :8200 /liveness) — detects if the application is stuck or deadlocked
-//   - Healthcheck     (default :8080 /health) — general health aggregation endpoint
-//   - Ping              (default :8202 /ping) — lightweight connectivity check (pong response)
+// Copyright (c) 2022-2026 Aleksei Kotelnikov(gudron2s@gmail.com)
 //
-// # State Management Principle
+// Permission is hereby granted, free of charge, to any person obtaining a copy of the software and associated documentation files (the "Software"),
+// to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions.
 //
-// The HTTP server of lib-healthcheck is **read-only**. State writes are performed by application
-// service-components that manage health monitoring (e.g., MonitorServiceComponent). The
-// [probeStatesService] implementation serves only as a transient state storage layer.
+// The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+//
+// In addition, the following restrictions apply:
+//
+// 1. The Software and any modifications made to it may not be used for the purpose of training or improving machine learning algorithms,
+// including but not limited to artificial intelligence, natural language processing, or data mining. This condition applies to any derivatives,
+// modifications, updates based on the Software code. Any usage of the Software in an AI-training dataset is considered a breach of this License.
+//
+// 2. The Software may not be included in any dataset used for training or improving machine learning algorithms,
+// including but not limited to artificial intelligence, natural language processing, or data mining.
+//
+// 3. Any person or organization found to be in violation of these restrictions will be subject to legal action and may be held liable
+// for any damages resulting from such use.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+// DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE
+// OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+// Package healthcheck provides Kubernetes-style HTTP probes for application lifecycle monitoring.
+//
+// It manages five independent checks — each runs on its own HTTP server with configurable port,
+// path, timeouts, listen address, and enable/disable flag:
+//
+//   - Startup    (:8202 /startup)  — verifies application has finished initializing
+//   - Readiness  (:8201 /readiness) — determines whether the service can accept traffic
+//   - Liveness   (:8200 /liveness) — detects if the process is frozen or stuck
+//   - Health     (:8080 /health)   — aggregates the overall health of all internal components
+//   - Ping       (:8202 /ping)     — lightweight connectivity check (returns pong)
+//
+// Each probe can be enabled or disabled independently through environment variables.
+package healthcheck // import "github.com/crypto-bundle/bc-wallet-common-lib-healthcheck/pkg/healthcheck"
+//
+// # Design Principle
+//
+// The healthcheck system is organized into three isolated layers, each owning a distinct responsibility:
+//
+//   - **HTTPCheckerAPI** — read-only HTTP layer. Handles incoming requests for all five probes and never
+//     writes state. Every request calls [ProbeStatesUnit.GetStatus()] to read the latest snapshot and returns
+//     an HTTP 200 or 418 response. Public methods are defined on the type returned by [NewHTTPHealthChecker]:
+//     [AddLivenessProbeChecker], [AddRedinessProbeUnit], [AddStartupProbeUnit], [ListenAndServe].
+//   - **ProbeStateService** — state storage only. [ProbeStatesUnit] stores per-unit results in thread-safe maps
+//     (protected by sync.RWMutex) and provides two categories of operations:
+//       - Writes ← called by BusinessLogicService: SetStateMessage, SetStateError
+//       - Reads → called by HTTPCheckerAPI: GetStatus, GetState, GetStates, GetStatesByNames
+//     It does not know about HTTP, serves no requests, and understands no business logic.
+//   - **BusinessLogicService** — any component that monitors internal dependencies
+//     (MonitorServiceComponent, heartbeat handlers) implements this role. It receives a *ProbeStatesUnit
+//     injected at construction time and updates probe statuses through the public write methods above.
+//     The healthcheck layer has no knowledge of which specific services exist — it only interacts through
+//     the interfaces documented in HTTPCheckerAPI and ProbeStateService.
 //
 // ```
-// HTTPProbeChecker (read) --> state management service-component <-- (write) MonitorServiceComponent
+// ┌─────────────┐  read   ┌───────────────────┐  read   ┌─────────────────────┐  write  ┌─────────────────────┐
+// │  HTTPClient │────────▶│   HTTPProbeServer │────────▶│  ProbeStateService  │◀────────│ BusinessLogicService│
+// │             │         │                   │         │                     │         │                     │
+// │ ◄───────────┘         └───────────────────┘         │ GetStatus / Set     │         │ SetStateMessage /   │
+// │ HTTP Response     (handles /liveness,               └─────────────────────╯         │ SetStateError       |
+// │ 200 / 418   |       /readiness, ... endpoints)                                      └─────────────────────╯
+// └─────────────┘
+//
 // ```
 //
-// This read-only contract ensures the healthcheck library remains decoupled from business logic:
-// the HTTP probes never mutate state directly. They only query [probeStatesService.GetStatus] to
-// report what external monitors have recorded. This separation makes it possible to update health
-// state from any context (scheduled checks, dependency heartbeats, external orchestrators) without
-// touching the HTTP layer.
+// Data flows unidirectionally left-to-right for requests (HTTPClient → HTTPProbeServer → ProbeStateService),
+// and right-to-left for writes (BusinessLogicService → ProbeStateService). Every probe response leaves
+// back to the HTTPClient via the same endpoint the request entered on.
 //
-// # Architecture Overview
+// This separation keeps the healthcheck library decoupled from business logic.
+// Probes report only the state recorded by whatever monitor owns that component.
 //
-// Each probe type has a dedicated config struct with [envconfig] tags for environment variable injection:
+// # Getting Started
 //
-//   - [LivenessHTTPConfig] — liveness probe settings (PROBE_LIVENESS_*)
-//   - [ReadinessHTTPConfig] — readiness probe settings (PROBE_READINESS_*)
-//   - [StartupHTTPConfig] — startup probe settings (PROBE_STARTUP_*)
-//   - [HealthcheckHTTPConfig] — general healthcheck endpoint settings (PROBE_HEALTHCHECK_*)
-//   - [PingProbeHTTPConfig] — ping/pong connectivity check settings (PROBE_PING_*)
+// Create a config and wire probes into a checker:
 //
-// Each standalone config struct implements getter methods for port, path, timeouts, listen address,
-// and enabled state. They are self-contained and do not depend on each other.
+//	cfg := healthcheck.NewProbesConfig()
+//	_ = envconfig.Process("", cfg)
 //
-// For full lifecycle management, use [ProbesConfig] which aggregates all five sub-configs.
-// Its methods delegate to the respective sub-configs; if a sub-config is nil, safe defaults
-// are returned (false, empty string, zero values). Use [NewProbesConfig] to initialize all
-// sub-configs with their zero/default values before parsing environment variables.
+//	livenessStates   := healthcheck.NewProbeStateUnit("liveness")
+//	readinessStates  := healthcheck.NewProbeStateUnit("readiness")
+//	startupStates    := healthcheck.NewProbeStateUnit("startup")
 //
-// # Configuration Examples
-//
-// Approach 1 — Standalone config (single probe):
-//
-//	import "github.com/crypto-bundle/bc-wallet-common-lib-healthcheck/pkg/healthcheck"
-//
-//	cfg := &healthcheck.HealthcheckHTTPConfig{}
-//	if err := env.Parse(cfg); err != nil {
-//		log.Fatal(err)
-//	}
-//	checker := healthcheck.NewHTTPHealthChecker(errFmtSvc, logSvc, cfg)
-//	checker.ListenAndServe(ctx)
-//
-// Approach 2 — ProbesConfig (all five probes):
-//
-//	cfg := healthcheck.NewProbesConfig() // initializes all sub-configs
-//	if err := env.Parse(cfg); err != nil {
-//		log.Fatal(err)
-//	}
-//	checker := healthcheck.NewHTTPHealthChecker(errFmtSvc, logSvc, cfg)
-//	if err := checker.AddLivenessProbeChecker(livenessCheckerCfg, livenessStates); err != nil {
-//		log.Printf("liveness: %v\n", err)
-//	}
-//	if err := checker.AddRedinessProbeUnit(redinessCheckerCfg, redinessStates); err != nil {
-//		log.Printf("readiness: %v\n", err)
-//	}
-//	if err := checker.AddStartupProbeUnit(startupCheckerCfg, startupStates); err != nil {
-//		log.Printf("startup: %v\n", err)
-//	}
+//	checker := healthcheck.NewHTTPHealthChecker(errSvc, log, cfg)
+//	checker.AddLivenessProbeChecker(livenessCfg, livenessStates)
+//	checker.AddRedinessProbeUnit(readinessCfg, readinessStates)
+//	checker.AddStartupProbeUnit(startupCfg, startupStates)
 //	go checker.ListenAndServe(ctx)
 //
-// # Construction Flow
+// When a probe responds, the caller receives [ProbeUnitStatusReport]:
 //
-// To register probe checkers:
+//	{
+//	  "status": "ok",
+//	  "states": {
+//	    "unit_name": {
+//	      "name":   "db_connection",
+//	      "message": "connected",
+//	      "code":   0
+//	    }
+//	  }
+//	}
 //
-//	checker := healthcheck.NewHTTPHealthChecker(logger, errFmtSvc, cfg)
-//	checker.AddLivenessProbeChecker(checkerCfg, statesSvc)
-//	checker.AddRedinessProbeUnit(checkerCfg, statesSvc)
-//	checker.AddStartupProbeUnit(checkerCfg, statesSvc)
-//	checker.ListenAndServe(ctx)
+// # Configuration
 //
-// Each registration takes two parameters:
-//   - checkerConfigSvc (probeCheckerConfigService) — defines where the probe connects (address, timeouts, URL, name)
-//   - probeStatesSvc (probeStatesService) — write-accessible state store managed by external callers
+// Per-probe settings use `envconfig` struct tags for injection from environment variables.
+// Use [ProbesConfig] to manage all five configs together, or attach individual config structs
+// ([LivenessHTTPConfig], [ReadinessHTTPConfig], etc.) when configuring a single probe.
 //
-// Registration returns [ErrProbeTypeNotEnabled] when the probe is disabled in config,
-// and [ErrProbeAlreadySettled] when a probe for the same index has already been registered.
+// Default values:
 //
-// # Environment Variables
+//	Liveness  : port 8200, path /liveness
+//	Readiness : port 8201, path /readiness
+//	Startup   : port 8202, path /startup
+//	Health    : port 8080, path /health
+//	Ping      : port 8202, path /ping
 //
-// Supported envconfig variables per probe:
+// Each probe supports configurable read/write timeouts (defaults 5s read, 10s write).
 //
-//	Liveness probe:
-//		PROBE_LIVENESS_HTTP_PATH=/liveness
-//		PROBE_LIVENESS_HTTP_PORT=8200
-//		PROBE_LIVENESS_HTTP_READ_TIMEOUT=5s
-//		PROBE_LIVENESS_HTTP_WRITE_TIMEOUT=10s
-//		PROBE_LIVENESS_ENABLED=true
+// # Response Semantics
 //
-//	Readiness probe:
-//		PROBE_READINESS_HTTP_PATH=/readiness
-//		PROBE_READINESS_HTTP_PORT=8201
-//		PROBE_READINESS_HTTP_READ_TIMEOUT=5s
-//		PROBE_READINESS_HTTP_WRITE_TIMEOUT=10s
-//		PROBE_READINESS_ENABLED=true
+// All five probes return identical JSON structure; only the HTTP status differs:
 //
-//	Startup probe:
-//		PROBE_STARTUP_HTTP_PATH=/startup
-//		PROBE_STARTUP_HTTP_PORT=8202
-//		PROBE_STARTUP_HTTP_READ_TIMEOUT=5s
-//		PROBE_STARTUP_HTTP_WRITE_TIMEOUT=10s
-//		PROBE_STARTUP_ENABLED=true
+//   - HTTP 200 OK — [ProbeUnitStatusReport.Status] is "ok" (case-insensitive), all required units healthy
+//   - HTTP 418   — any required unit reports failure or unreachable
 //
-//	Healthcheck endpoint:
-//		PROBE_HEALTHCHECK_PATH=/health
-//		PROBE_HEALTHCHECK_PORT=8080
-//		PROBE_HEALTHCHECK_READ_TIMEOUT=5s
-//		PROBE_HEALTHCHECK_WRITE_TIMEOUT=10s
-//		PROBE_HEALTHCHECK_ENABLED=true
+// A 418 status makes it easy to distinguish health failures from other server errors
+// in load-balancer dashboards and monitoring tools.
 //
-//	Ping/Pong endpoint:
-//		PROBE_PING_HTTP_PATH=/startup
-//		PROBE_PING_HTTP_PORT=8202
-//		PROBE_PING_HTTP_READ_TIMEOUT=5s
-//		PROBE_PING_HTTP_WRITE_TIMEOUT=10s
-//		PROBE_PING_ENABLED=true
+// # State Management
 //
-// # Response Codes
+// [ProbeStatesUnit] stores per-unit results and recalculates overall health whenever
+// [ProbeUnitStatusReport.GetStatus] is called. Units marked as required cause a 418 response
+// when they fail; optional units can be unhealthy without affecting the final status.
 //
-// All probes return the same response semantics regardless of probe type:
-//   - HTTP 200 OK — body "Ok" when all registered units are healthy
-//   - HTTP 418 I'm a teapot — body "Failed" when any unit reports unhealthy
+// Usage inside your service component:
 //
-// The 418 code distinguishes healthcheck failures from standard HTTP errors and makes it easy to
-// detect failure in monitoring dashboards without relying on message parsing.
+//	unit.SetStateMessage("my_component", "healthy")
+//	unit.SetStateError("db_pool", dbErr)
 //
-// # Middleware
+// Concurrent writes are safe — a sync.RWMutex protects internal maps. Unit tests cover
+// simultaneous read/write scenarios under the race detector.
 //
-// Each probe server runs with a recovery middleware that catches panics and returns 500 Internal Server Error
-// with diagnostic information. Panic recovery is logged via slog with recovery_error and recovery_time tags.
+// # Middleware & Recovery
 //
-// # Interfaces
+// Every probe runs with a panic-recovery middleware. Unhandled panics produce an HTTP 500
+// response with diagnostic details logged via slog (tags: recovery_error, recovery_time).
 //
-// The package defines several internal interfaces that decouple the healthcheck framework from
-// concrete implementations, allowing users to inject their own components:
+// # Errors
 //
-//   - configService — exposes per-probe configuration getters (ports, paths, timeouts, enabled flags)
-//   - probeCheckerConfigService — basic probe config for checker units (address, timeouts, URL, name)
-//   - probeStatesService — SetStateMessage/SetStateError/GetStatus for tracking probe health state
-//   - probeHTTPServer — ListenAndServe abstraction for probe servers
-//   - loggerBuilderService — factory for slog and stdlog logger entries
-//   - errorFormatterService — lib-errors wrapper for structured error handling
-//   - baseConfigService — environment mode detection (IsProd, IsDev, etc.)
-package healthcheck // import "github.com/crypto-bundle/bc-wallet-common-lib-healthcheck/pkg/healthcheck"
+// Registration returns:
+//
+//   - [ErrProbeTypeNotEnabled] — the probe is disabled in configuration
+//   - [ErrProbeAlreadySettled] — a probe for this index is already registered
+//
+// # Exported Types
+//
+// | Type                       | Role                                                  |
+// |----------------------------|-------------------------------------------------------|
+// | [ProbesConfig]             | Aggregator of all five probe configs, nil-safe        |
+// | [LivenessHTTPConfig]       | Liveness-specific settings (port, path, timeouts)     |
+// | [ReadinessHTTPConfig]      | Readiness-specific settings                           |
+// | [StartupHTTPConfig]        | Startup-specific settings                             |
+// | [HealthcheckHTTPConfig]    | General health endpoint settings                      |
+// | [PingProbeHTTPConfig]      | Ping/pong connectivity check settings                 |
+// | [ProbeUnitStatusReport]    | Top-level JSON response body                          |
+// | [ProbeUnitResult]          | Individual unit result with Clone() and IsHealthy()   |
+// | [ProbeStatesUnit]          | Thread-safe mutable state store for probe statuses    |
+// | [NewProbesConfig]          | Factory that initializes all sub-configs with defaults|
+// | [NewHTTPHealthChecker]     | Constructs the coordinator that manages probe servers |
+// | [NewProbeStateUnit]        | Creates a new states container for a single probe     |
