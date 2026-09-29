@@ -329,21 +329,6 @@ func (c *ProbesConfig) GetLivenessParams() *unitConfig {
 	}
 }
 
-// NewProbesConfig creates ProbesConfig with all sub-configs initialized
-// to their zero/default values. After creation, use env.Parse() or
-// envconfig.Process() to populate fields from environment variables.
-//
-//nolint:exhaustruct // envconfig tags provide defaults
-func NewProbesConfig() *ProbesConfig {
-	return &ProbesConfig{
-		LivenessProbeHTTPSrv: &LivenessHTTPConfig{},
-		RedinessProbeHTTPSrv: &ReadinessHTTPConfig{},
-		StartupProbeHTTPSrv:  &StartupHTTPConfig{},
-		HealthcheckHTTPSrv:   &HealthcheckHTTPConfig{},
-		PingHTTPSrv:          &PingProbeHTTPConfig{},
-	}
-}
-
 // Prepare initializes the configuration (no-op placeholder).
 func (c *ProbesConfig) Prepare() error {
 	return nil

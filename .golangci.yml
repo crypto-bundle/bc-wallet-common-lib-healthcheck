@@ -121,6 +121,9 @@ linters:
           - goconst
           - paralleltest
           - testpackage
+          - exhaustruct_v5
+          - gochecknoglobals
+          - gosec
 
       - path: doc\.go
         linters:
@@ -130,6 +133,8 @@ linters:
         linters:
          - lll
   settings:
+    dupl:
+      threshold: 140 
     gci:
       sections:
         - standard

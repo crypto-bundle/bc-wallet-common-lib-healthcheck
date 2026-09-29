@@ -92,7 +92,8 @@ func newHTPProbeCheckerServer(
 
 	mux.Handle(configSvc.GetRequestURL(), handlerWithMiddleware.GetHTTPHandler())
 
-	server := &http.Server{ //nolint:exhaustruct // only addr, handler, timeout needed for probes
+	//nolint:exhaustruct,exhaustruct_v5 // only addr, handler, timeout needed for probes
+	server := &http.Server{
 		Addr:         configSvc.GetListenAddress(),
 		Handler:      mux,
 		ReadTimeout:  configSvc.GetHTTPReadTimeout(),

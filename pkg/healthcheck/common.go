@@ -51,6 +51,8 @@ type probeCheckerConfigService interface {
 }
 
 // configService provides per-probe configuration getters derived from environment variables.
+//
+//nolint:interfacebloat // 30 methods (6 per probe × 5 probes), necessary for healthcheck lifecycle
 type configService interface {
 	IsLivenessProbeEnable() bool
 	GetLivenessListenAddress() string
@@ -95,6 +97,8 @@ type probeHTTPServer interface {
 
 // errorFormatterService wraps lib-errors utilities for structured error handling across
 // the healthcheck package.
+//
+//nolint:interfacebloat // all methods serve distinct roles for structured error handling
 type errorFormatterService interface {
 	ErrWithCode(err error, code int) error
 	NewErrorWithCode(text string, code int) error
