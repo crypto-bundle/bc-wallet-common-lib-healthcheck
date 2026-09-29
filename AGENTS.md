@@ -8,7 +8,7 @@
 |---|---|
 | Module | `github.com/crypto-bundle/bc-wallet-common-lib-healthcheck` |
 | Package | `pkg/healthcheck` |
-| Go version | 1.23 |
+| Go version | 1.27 |
 | License | MIT NON-AI |
 | Author | [@gudron (Alex V Kotelnikov)](https://github.com/gudron) |
 
@@ -16,8 +16,9 @@
 
 | Dependency | Purpose |
 |---|---|
-| `github.com/crypto-bundle/bc-wallet-common-lib-errors` | Structured error formatting with codes |
 | `github.com/mailru/easyjson` | JSON serialization for probe status reports (`ProbeUnitStatusReport`, `ProbeUnitResult`) |
+
+Notes: Error formatting is implemented locally — `ErrorOnly`, `ErrWithCode`, `ErrorNoWrap`, `ErrorCodeIsOneOf`, etc. The external `bc-wallet-common-lib-errors` package is **not** a dependency of this library.
 
 ---
 
@@ -32,20 +33,65 @@
 
 ## Tech Stack
 
-- **Language**: Go 1.23+
-- **Logging**: `log/slog` (structured logging), no zap dependency
+- **Language**: Go 1.27+
+- **Logging**: `*log.Logger` (standard lib logger); probes use slog-style structured tags (`slog.Key("key")`) for consistent output
 - **Configuration**: `envconfig` tags on structs for environment variable injection
 - **Linting**: `golangci-lint` with 80+ linters enabled, configured via `.golangci.yml`
-- **Build tool**: `Makefile` with `lint` target
+- **Build tool**: `Makefile` with `lint`, `test`, and `test-docker` targets
 - **JSON**: `github.com/mailru/easyjson` code generation via `//go:generate easyjson` directives
 
-### golangci-lint Highlights
+### golangci-lint v2 Config
 
-The linter config enforces:
-- Full suite of fast linters (`fast: true`)
-- Presets: bugs, comment, complexity, error, format, import, metalinter, module, performance, sql, style, test, unused
-- Custom rules: `wrapcheck` ignores lib-errors wrapping helpers, `gci` orders imports as standard > localmodule > default > blank
-- Disabled linters: `gofumpt`, `tagalign`, `execinquery` (legacy)
+| Section | Detail |
+|---|---|
+| Format | `version: "2"` (golangci-lint v2 schema) |
+| Concurrency | 4 workers, 5 m timeout |
+| Modules download | `readonly` |
+| Fast linters | Enabled (`fast: true`) |
+| Preset rules | `exhaustive-explicit-exhaustive-switch` |
+
+**Top-level linters** (selected):
+```yaml
+linters:
+  default: none
+  enable:
+    - asasalint, asciicheck, bidichk, bodyclose, canonicalheader
+    - containedctx, contextcheck, copyloopvar, cyclop
+    - decorder, depguard, dogsled, dupl, dupword, durationcheck
+    - err113, errcheck, errchkjson, errname, errorlint
+    - exhaustive, exhaustruct_v5, fatcontext, forbidigo
+    - forcetypeassert, funlen, ginkgolinter
+    - gocheckcompilerdirectives, gochecknoglobals, gochecksumtype
+    - gocognit, goconst, gocritic, gocyclo, godot, godox
+    - gomoddirectives, gomodguard_v2, goprintffuncname
+    - gosec, gosmopolitan, govet, grouper, importas
+    - inamedparam, ineffassign, interfacebloat, intrange
+    - ireturn, lll, loggercheck, maintidx, makezero
+    - mirror, misspell, mnd, musttag, nakedret
+    - nestif, nilerr, nilnil, nlreturn, noctx, nolintlint
+    - nonamedreturns, nosprintfhostport, paralleltest, perfsprint
+    - prealloc, predeclared, promlinter, protogetter, reassign
+    - revive, rowserrcheck, sloglint, spancheck, sqlclosecheck
+    - staticcheck, tagalign, tagliatelle, testableexamples
+    - testifylint, testpackage, thelper, tparallel, unconvert
+    - unparam, unused, usestdlibvars, varnamelen
+    - wastedassign, whitespace, wrapcheck, wsl_v5
+    - zerologlint, goheader
+```
+
+**Formatter section** (v2 new feature):
+```yaml
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - goimports
+```
+
+**Exclusion rules** (moved into `run` block in v2):
+- Test files (`*_test.go`): skip `govet`, `cyclop`, `err113`, `funlen`, `gocognit`, `goconst`, `paralleltest`, `testpackage`, `exhaustruct_v5`, `gochecknoglobals`, `gosec`
+- `doc.go`: skip `goheader`
+- Leading `* ` source comments: skip `lll`
 
 ---
 
@@ -62,9 +108,9 @@ NewHTTPHealthChecker(errFmtSvc, logger, cfgSvc)
 │   │       └── worker probeStatesService  // Read/write state store (SetStateMessage/SetStateError/GetStatus)
 ├── ListenAndServe(ctx)                 // Launches all probe servers as goroutines
 ├── AddLivenessProbeChecker(cfg, statesSvc)  // Register a liveness probe checker unit
-├── AddRedinessProbeUnit(cfg, statesSvc)     // Register a readiness probe checker unit
+├── AddRedinessProbeUnit(cfg, statesSvc)     // Register a readiness probe checker unit  
 ├── AddStartupProbeUnit(cfg, statesSvc)      // Register a startup probe checker unit
-└── (healthcheck/ping registered internally)  // auto-enabled based on config flags
+└── (healthcheck/ping registered internally at newHTTPHealthChecker construction time)  // Routes set up immediately; server started in ListenAndServe if enabled
 ```
 
 ### Data Flow
@@ -72,7 +118,7 @@ NewHTTPHealthChecker(errFmtSvc, logger, cfgSvc)
 1. **Configuration**: User creates `*ProbesConfig` (aggregates all sub-configs) → passes to `NewHTTPHealthChecker`
 2. **Initialization**: Factory instantiates one `probeUnit` per enabled probe at registration time, each with its own `http.Server`
 3. **Registration**: User calls `AddLivenessProbeChecker()`, `AddRedinessProbeUnit()`, `AddStartupProbeUnit()` with a `probeCheckerConfigService` (read-only probe params) and `probeStatesService` (mutable state store written by external callers)
-4. **External State Writes**: Application service-components (e.g., MonitorServiceComponent) call `SetStateMessage()` / `SetStateError()` on the injected `probeStatesService`. The healthcheck layer itself never mutates state.
+4. **External State Writes**: Application service-components (e.g., MonitorServiceComponent) call `SetStateMessage()` / `SetStateError()` on the injected `ProbeStatesUnit`. The healthcheck layer itself never mutates state.
 5. **Request**: HTTP request arrives at any probe endpoint → `httpHandler.ServeHTTP()` calls `worker.GetStatus()` → returns JSON snapshot of all registered unit results
 6. **Response**: Returns HTTP 200 with `{status:"...",states:{...}}` if overall status is Success; HTTP 418 with same structure if any required field failed
 
@@ -92,7 +138,8 @@ NewHTTPHealthChecker(errFmtSvc, logger, cfgSvc)
 | `middlewareRecovery` | Catches panics, logs diagnostics, returns 500 |
 | `ProbeUnitStatusReport` | Top-level JSON response struct with aggregated `Status` and per-unit `States` map |
 | `ProbeUnitResult` | Individual unit result with `Name`, `Message`, `Code`, and internal `err`/`isRequired` fields |
-| `probeStatesService` | Mutable state store written by external callers; `SetStateMessage()`, `SetStateError()`, `GetStatus()`, `GetState()`, `GetStates()`, `GetStatesByNames()` |
+| `probeStatesUnit` | Internal worker type used by probeUnits; implements `probeStatesService` interface |
+| `ProbeStatesUnit` | **Exported** — thread-safe mutable state store created via `NewProbeStateUnit(...)`, written by external callers via `SetStateMessage()` / `SetStateError()`, read-only via `GetStatus()` |
 
 ### Interfaces (internal, unexported)
 
@@ -102,9 +149,7 @@ NewHTTPHealthChecker(errFmtSvc, logger, cfgSvc)
 | `probeCheckerConfigService` | `GetListenAddress()`, `GetHTTPReadTimeout()`, `GetHTTPWriteTimeout()`, `GetRequestURL()`, `GetProbeName()` | `newHTPProbeCheckerServer`, `httpHandler` |
 | `probeStatesService` | `SetStateMessage(name, msg)`, `SetStateError(name, err)`, `GetStatus()` | `httpHandler` |
 | `probeHTTPServer` | `ListenAndServe(ctx)` | `httpHealthChecker` |
-| `loggerBuilderService` | `NewStdLoggerEntry(...)`, `NewStdNamedLoggerEntry(...)`, `NewSlogLoggerEntry(...)`, `NewSlogNamedLoggerEntry(...)`, `NewSlogLoggerEntryWithFields(...)` | `probeUnit` |
 | `errorFormatterService` | `ErrWithCode(err, code)`, `NewErrorWithCode(text, code)`, `ErrorGetCode(err)`, `ErrorCodeIsOneOf(err, codes...)`, `ErrorOnly(err, details...)`, `Errorf(err, fmt, args...)`, `NewError(details...)`, ... | `httpHandler`, `middlewareRecovery`, `probeUnit`, `probeStatesUnit` |
-| `baseConfigService` | `IsProd()`, `IsStage()`, `IsTest()`, `IsDev()`, `IsDebug()`, `IsLocal()` | — |
 
 ---
 
@@ -216,7 +261,9 @@ Test files follow the naming convention `*_test.go` and live alongside source fi
 
 | Target | Command | Purpose |
 |---|---|---|
-| `lint` | `golangci-lint run --config .golangci.yml -v ./...` | Full lint suite |
+| `lint` | `golangci-lint run --config .golangci.yml -v ./...` | Full lint suite (v2 format) |
+| `test` | `go test -v -race -cover ./...` | Run unit tests with race detector |
+| `test-docker` | `docker build -f test.dockerfile ... && docker run ... go test` | Run tests inside Alpine container |
 
 ### Pre-commit Checks
 
@@ -265,11 +312,12 @@ Every `.go` file must include the full license header block. Use `copyright.txt.
 ├── LICENSE                         # MIT NON-AI License text
 ├── Makefile                        # Build/lint targets
 ├── README.md                       # Project description
-├── copyright.txt.tpl               # License header template
-├── .golangci.yml                   # Linter configuration
+├── copyright.txt.tpl               # License header template for goheader
+├── .golangci.yml                   # Linter configuration (v2 format)
+├── test.dockerfile                 # Docker image for tests & CI checks
 └── pkg/
     └── healthcheck/
-        ├── common.go               # Internal interfaces (configService, probeCheckerConfigService, probeStatesService, etc.)
+        ├── common.go               # Internal interfaces (configService, probeCheckerConfigService, probeStatesService, errorFormatterService, probeHTTPServer)
         ├── const.go                # Constants (tags, message strings)
         ├── types.go                # Probe indices (iota), name constants, status enums, String() methods
         ├── doc.go                  # Package documentation
@@ -301,5 +349,4 @@ Every `.go` file must include the full license header block. Use `copyright.txt.
 | Broken constant name | `types.go` | `HealthCheckrobeIndex` (missing 'p') — should be `HealthCheckProbeIndex` |
 | Missing case in `ProbeIndex.String()` | `types.go` | No case for `HealthCheckrobeIndex` or `PingProbeIndex` — falls through to `ProbeNameUnsupported` |
 | Unmatched `ProbeUnitStatusSuccessName` | `types.go` | Set to `"startup_checker_unit"` instead of a meaningful success label |
-| Duplicate file name | `pkg/healthcheck/` | `http_config_kubernetes_startup copy.go` — likely an accidental copy; should be renamed to `http_config_kubernetes_startup.go` |
 | Missing easyjson files | `pkg/healthcheck/` | `*_easyjson.go` files generated via `go generate` — must not be edited manually; regenerate only via `go:generate` directives |
