@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This repository includes `Dockerfile.test` — an Alpine-based container for running **linting** and **go vet** checks in a clean, reproducible environment.
+This repository includes `test.dockerfile` — an Alpine-based container for running **linting** and **go vet** checks in a clean, reproducible environment.
 
 This ensures consistent code quality across different developer machines and CI systems without needing Go or golangci-lint installed locally.
 
@@ -11,7 +11,7 @@ This ensures consistent code quality across different developer machines and CI 
 ### Build the image
 
 ```bash
-docker build -f Dockerfile.test -t bc-wallet-healthcheck:test .
+docker build -f test.dockerfile -t bc-wallet-healthcheck:test .
 ```
 
 ### Run default checks (vet + lint)
