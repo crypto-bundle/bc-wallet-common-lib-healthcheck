@@ -174,6 +174,7 @@ linters:
         main:
           allow:
             - $gostd
+            - github.com/mailru/easyjson
             - github.com/mailru/easyjson/gen
             - github.com/crypto-bundle/
     varnamelen:
@@ -189,17 +190,15 @@ linters:
       ignore-decls:
         - i int
         - j int
+        - id int
     govet:
       enable-all: true
     goheader:
       values:
         const:
-          # Define here const type values in format k:v.
-          # For example:
           AUTHOR: Aleksei Kotelnikov
           EMAIL: gudron2s@gmail.com
       template-path: ./copyright.txt.tpl
-
 formatters:
   enable:
     - gci

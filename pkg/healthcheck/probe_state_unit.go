@@ -39,8 +39,7 @@ var (
 
 var _ probeStatesService = (*probeStatesUnit)(nil)
 
-// probeStatesUnit manages named health-state entries with per-field error tracking and status recalculation. probe units sequentially until all pass or one fails (fail-fast).
-// probeStatesUnit implements probeStatesService by managing health state entries per field.
+// probeStatesUnit manages named health-state entries with per-field error tracking and status recalculation.
 type probeStatesUnit struct {
 	e             errorFormatterService
 	mu            *sync.RWMutex
@@ -50,7 +49,6 @@ type probeStatesUnit struct {
 }
 
 // NewProbeStateUnit creates a new probeStatesUnit pre-populated with required state fields. Each field is initialized to success.
-// NewProbeStateUnit creates a new probe state unit initialized with the given required state fields.
 func NewProbeStateUnit(
 	errFmtSvc errorFormatterService,
 	requiredStateFields ...string,
@@ -80,7 +78,6 @@ func NewProbeStateUnit(
 }
 
 // GetStatus returns a snapshot of the probe unit status along with all tracked states.
-// GetStatus returns a snapshot of the current probe status including detailed state map.
 func (w *probeStatesUnit) GetStatus() *ProbeUnitStatusReport {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
@@ -92,7 +89,6 @@ func (w *probeStatesUnit) GetStatus() *ProbeUnitStatusReport {
 }
 
 // GetState retrieves a single named state entry, returning nil if the key does not exist.
-// GetState returns the probe unit result for a specific field name, or nil if the field does not exist.
 func (w *probeStatesUnit) GetState(name string) *ProbeUnitResult {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
@@ -106,7 +102,6 @@ func (w *probeStatesUnit) GetState(name string) *ProbeUnitResult {
 }
 
 // GetStatesByNames returns a map of copies for only the requested names, skipping absent keys.
-// GetStatesByNames returns a filtered copy containing only entries whose names appear in the input list.
 func (w *probeStatesUnit) GetStatesByNames(names ...string) map[string]ProbeUnitResult {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
@@ -126,7 +121,6 @@ func (w *probeStatesUnit) GetStatesByNames(names ...string) map[string]ProbeUnit
 }
 
 // GetStates returns a copy of the entire states map keyed by field name.
-// GetStates returns a complete copy of all registered probe states for the unit.
 func (w *probeStatesUnit) GetStates() map[string]ProbeUnitResult {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
@@ -145,8 +139,7 @@ func (w *probeStatesUnit) getStates() map[string]ProbeUnitResult {
 }
 
 // SetStateMessage updates the Message field of an existing entry or creates a new optional one.
-// SetStateMessage sets the message text for an existing field; it creates a new optional entry if the field is not yet present.
-func (w *probeStatesUnit) SetStateMessage(name string, mesage string) {
+func (w *probeStatesUnit) SetStateMessage(name string, message string) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
@@ -154,7 +147,7 @@ func (w *probeStatesUnit) SetStateMessage(name string, mesage string) {
 	if !ok {
 		w.states[name] = &ProbeUnitResult{
 			Name:    name,
-			Message: mesage,
+			Message: message,
 			Code:    uint16(MessageCodeEverythingOK),
 
 			err:        nil,
@@ -164,7 +157,7 @@ func (w *probeStatesUnit) SetStateMessage(name string, mesage string) {
 		return
 	}
 
-	element.Message = mesage
+	element.Message = message
 }
 
 // SetStateError applies the given error to a named entry and recalculates overall status.
@@ -176,11 +169,10 @@ func (w *probeStatesUnit) SetStateError(name string, err error) {
 
 	switch {
 	case !ok && err != nil:
-		// New required-field entry arriving with an error — create it.
 		w.states[name] = &ProbeUnitResult{
 			Name:       name,
 			Message:    err.Error(),
-			Code:       uint16(w.e.ErrGetCode(err)),
+			Code:       uint16(w.e.ErrGetCode(err)), //nolint:gosec // ErrGetCode returns non-negative int, safe conversion
 			err:        err,
 			isRequired: true,
 		}
@@ -188,19 +180,18 @@ func (w *probeStatesUnit) SetStateError(name string, err error) {
 		w.recalculateStatusLocked()
 
 	case !ok && err == nil:
-		// No-op: do not fabricate entries when caller passes nil error.
 		return
 
 	case ok && err != nil:
 		value.Message = err.Error()
-		value.Code = uint16(w.e.ErrGetCode(err))
+		value.Code = uint16(w.e.ErrGetCode(err)) //nolint:gosec // ErrGetCode returns non-negative int, safe conversion
 		value.err = err
 
 		w.recalculateStatusLocked()
 
 	case ok && err == nil:
 		value.Message = ""
-		value.Code = uint16(w.e.ErrGetCode(err))
+		value.Code = uint16(w.e.ErrGetCode(nil)) //nolint:gosec // ErrGetCode returns 0 for nil, safe conversion
 		value.err = nil
 
 		w.recalculateStatusLocked()

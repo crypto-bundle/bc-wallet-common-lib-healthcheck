@@ -34,11 +34,11 @@ import (
 )
 
 var (
-	testErrDB        = errors.New("database unavailable")
-	testErrTimeout   = errors.New("request timeout")
-	testFieldMessage = "all systems nominal"
-	mockErrCode      = uint16(500)
-	mockErrCodeTMO   = uint16(408)
+	errDatabaseUnavailable = errors.New("database unavailable")
+	errRequestTimeout      = errors.New("request timeout")
+	testFieldMessage       = "all systems nominal"
+	mockErrCode            = uint16(500)
+	mockErrCodeTMO         = uint16(408)
 )
 
 // mockErrorFormatter implements the full errorFormatterService interface for testing.
@@ -54,11 +54,11 @@ func (m *mockErrorFormatter) ErrGetCode(err error) int {
 		return 0
 	}
 
-	if errors.Is(err, testErrDB) {
+	if errors.Is(err, errDatabaseUnavailable) {
 		return int(mockErrCode)
 	}
 
-	if errors.Is(err, testErrTimeout) {
+	if errors.Is(err, errRequestTimeout) {
 		return int(mockErrCodeTMO)
 	}
 
@@ -171,7 +171,7 @@ func TestNewProbeStateUnit_ErrFmtSvcStored(t *testing.T) {
 	}
 
 	// Exercises the service path: set error → verify Code was populated from ErrGetCode.
-	unit.SetStateError("field1", testErrDB)
+	unit.SetStateError("field1", errDatabaseUnavailable)
 
 	state := unit.GetState("field1")
 	if state == nil || state.err == nil {
@@ -193,7 +193,7 @@ func TestGetStatus_ReturnsSnapshot(t *testing.T) {
 		t.Errorf("expected success, got %v", reportA.Status)
 	}
 
-	unit.SetStateError("field1", testErrDB)
+	unit.SetStateError("field1", errDatabaseUnavailable)
 
 	reportB := unit.GetStatus()
 	if reportB.Status != ProbeUnitStatusFailed {
@@ -501,15 +501,15 @@ func TestSetStateError_NewFieldWithError(t *testing.T) {
 	// — confirming that dynamic entries respect the required-flag and immediately surface as failures.
 	unit := newUnit("existing")
 
-	unit.SetStateError("new-dynamic", testErrDB)
+	unit.SetStateError("new-dynamic", errDatabaseUnavailable)
 
 	state := unit.GetState("new-dynamic")
 	if state == nil {
 		t.Fatal("expected created state, got nil")
 	}
 
-	if !errors.Is(state.err, testErrDB) {
-		t.Errorf("expected err=%v, got %v", testErrDB, state.err)
+	if !errors.Is(state.err, errDatabaseUnavailable) {
+		t.Errorf("expected err=%v, got %v", errDatabaseUnavailable, state.err)
 	}
 
 	if state.Name != "new-dynamic" {
@@ -554,15 +554,15 @@ func TestSetStateError_SetErrorOnExisting(t *testing.T) {
 	// error text, sets Code from w.e.ErrGetCode(err), and drives the overall status to Failed.
 	unit := newUnit("target")
 
-	unit.SetStateError("target", testErrTimeout)
+	unit.SetStateError("target", errRequestTimeout)
 
 	state := unit.GetState("target")
-	if state == nil || !errors.Is(state.err, testErrTimeout) {
+	if state == nil || !errors.Is(state.err, errRequestTimeout) {
 		t.Fatal("expected error to be set on existing field")
 	}
 
-	if state.Message != testErrTimeout.Error() {
-		t.Errorf("expected Message=%q, got %q", testErrTimeout.Error(), state.Message)
+	if state.Message != errRequestTimeout.Error() {
+		t.Errorf("expected Message=%q, got %q", errRequestTimeout.Error(), state.Message)
 	}
 
 	if state.Code != mockErrCodeTMO {
@@ -579,7 +579,7 @@ func TestSetStateError_ClearErrorOnExisting(t *testing.T) {
 	// are all reset — this confirms that recalculateStatusLocked() correctly drops Failed
 	// when the last required-field error disappears.
 	unit := newUnit("cleared")
-	unit.SetStateError("cleared", testErrDB)
+	unit.SetStateError("cleared", errDatabaseUnavailable)
 
 	mustStatus(t, unit, ProbeUnitStatusFailed, "before-clear")
 
@@ -610,7 +610,7 @@ func TestSetStateError_SetAndClearNonRequired(t *testing.T) {
 	unit := newUnit("required-stay-green")
 
 	unit.SetStateMessage("optional-debug", "checking...")
-	unit.SetStateError("optional-debug", testErrDB)
+	unit.SetStateError("optional-debug", errDatabaseUnavailable)
 
 	if unit.GetStatus().Status != ProbeUnitStatusSuccess {
 		t.Error("expected Success — optional field errors should not affect status")
@@ -635,9 +635,9 @@ func TestSetStateError_MultipleRequiredFailures(t *testing.T) {
 	// required-field error instead of accumulating failure counts.
 	unit := newUnit("a", "b", "c")
 
-	unit.SetStateError("a", testErrDB)
-	unit.SetStateError("b", testErrTimeout)
-	unit.SetStateError("c", testErrDB)
+	unit.SetStateError("a", errDatabaseUnavailable)
+	unit.SetStateError("b", errRequestTimeout)
+	unit.SetStateError("c", errDatabaseUnavailable)
 
 	status := unit.GetStatus()
 	if status.Status != ProbeUnitStatusFailed {
@@ -668,7 +668,7 @@ func TestSetStateError_RecoverFromFailure(t *testing.T) {
 
 	mustStatus(t, unit, ProbeUnitStatusSuccess, "initial")
 
-	unit.SetStateError("failing", testErrDB)
+	unit.SetStateError("failing", errDatabaseUnavailable)
 	mustStatus(t, unit, ProbeUnitStatusFailed, "after-set-error")
 
 	unit.SetStateError("failing", nil)
@@ -682,9 +682,9 @@ func TestSetStateError_OptionalDoesNotAffectStatus(t *testing.T) {
 	// removing them while a required field is already Failed must NOT alter the outcome.
 	// This prevents monitoring noise from spurious optional-component failures.
 	unit := newUnit("must-fail")
-	unit.SetStateError("must-fail", testErrDB)
+	unit.SetStateError("must-fail", errDatabaseUnavailable)
 
-	unit.SetStateError("extra-optional", testErrTimeout)
+	unit.SetStateError("extra-optional", errRequestTimeout)
 
 	status := unit.GetStatus()
 	if status.Status != ProbeUnitStatusFailed {
@@ -730,16 +730,16 @@ func TestConcurrentReadWriteRaceDetector(t *testing.T) {
 	// 5 writers — messages only.
 	for i := range 5 {
 		wg.Add(1)
-		go func(id int) {
+		go func(i int) {
 			defer wg.Done()
 
 			name := "concurrent-a"
-			if id%2 == 0 {
+			if i%2 == 0 {
 				name = "concurrent-b"
 			}
 
 			for range 50 {
-				unit.SetStateMessage(name, "msg-"+string(rune(id)))
+				unit.SetStateMessage(name, "msg-"+string(rune(i)))
 			}
 		}(i)
 	}
@@ -747,17 +747,17 @@ func TestConcurrentReadWriteRaceDetector(t *testing.T) {
 	// 5 writers — alternating SetStateError(set) / SetStateError(clear).
 	for i := range 5 {
 		wg.Add(1)
-		go func(id int) {
+		go func(i int) {
 			defer wg.Done()
 
 			name := "concurrent-a"
-			if id%2 == 0 {
+			if i%2 == 0 {
 				name = "concurrent-b"
 			}
 
 			for j := range 50 {
 				if j%2 == 0 {
-					unit.SetStateError(name, testErrDB)
+					unit.SetStateError(name, errDatabaseUnavailable)
 				} else {
 					unit.SetStateError(name, nil)
 				}

@@ -94,7 +94,7 @@ type probeHTTPServer interface {
 }
 
 // errorFormatterService wraps lib-errors utilities for structured error handling across
-// the healthcheck package. Interfacebloat is acceptable here because all methods serve a distinct role.
+// the healthcheck package.
 type errorFormatterService interface {
 	ErrWithCode(err error, code int) error
 	NewErrorWithCode(text string, code int) error
@@ -111,14 +111,4 @@ type errorFormatterService interface {
 	Errorf(err error, format string, args ...interface{}) error
 	NewError(details ...string) error
 	NewErrorf(format string, args ...interface{}) error
-}
-
-// baseConfigService detects the runtime environment mode (prod, stage, test, dev, debug, local).
-type baseConfigService interface {
-	IsProd() bool
-	IsStage() bool
-	IsTest() bool
-	IsDev() bool
-	IsDebug() bool
-	IsLocal() bool
 }

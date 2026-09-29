@@ -44,8 +44,6 @@ func (c *StartupHTTPConfig) getListenAddress() string {
 	return fmt.Sprintf(":%d", c.HealthCheckStartupHTTPPort)
 }
 
-// FIXED: receiver changed from *ReadinessHTTPConfig to *StartupHTTPConfig
-// FIXED: field changed from HealthCheckReadinessEnabled to HealthCheckStartupEnabled.
 func (c *StartupHTTPConfig) IsStartupProbeEnable() bool {
 	return c.HealthCheckStartupEnabled
 }
@@ -87,5 +85,5 @@ func (c *StartupHTTPConfig) GetRequestURL() string {
 }
 
 func (c *StartupHTTPConfig) GetProbeName() string {
-	return ProbeNameLiveness
+	return ProbeNameStartup
 }

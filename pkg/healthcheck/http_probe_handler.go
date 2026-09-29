@@ -55,22 +55,8 @@ func (h *httpHandler) ServeHTTP(respWriter http.ResponseWriter, httpReq *http.Re
 	respWriter.Header().Add("Content-Type", "application/json")
 	respWriter.WriteHeader(status)
 
-	easyjson.MarshalToWriter(respData, respWriter)
-}
-
-// writeResponse sends a plain-text response with the given status code and message body.
-func (h *httpHandler) writeResponse(respWriter http.ResponseWriter,
-	statusCode int,
-	message string,
-) {
-	respWriter.WriteHeader(statusCode)
-	respWriter.Header().Add("Content-Type", "text/plain")
-
-	_, writeErr := respWriter.Write([]byte(message))
-	if writeErr != nil {
-		h.l.Printf("unable to write http probe response: %e", writeErr)
-
-		return
+	if _, err := easyjson.MarshalToWriter(respData, respWriter); err != nil {
+		h.l.Printf("marshal response error: %e", err)
 	}
 }
 
