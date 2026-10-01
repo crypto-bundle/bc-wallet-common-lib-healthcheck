@@ -134,9 +134,14 @@ package healthcheck // import "github.com/crypto-bundle/bc-wallet-common-lib-hea
 //
 // # State Management
 //
-// [ProbeStatesUnit] stores per-unit results and recalculates overall health whenever
+// [ProbeStatesUnit] stores per-unit results as FIFO history lists and recalculates overall health whenever
 // [ProbeUnitStatusReport.GetStatus] is called. Units marked as required cause a 418 response
 // when they fail; optional units can be unhealthy without affecting the final status.
+//
+// Internally each named state holds a [probeStatesList] — a fixed-capacity buffer (default N=8)
+// of historical [ProbeUnitResult] snapshots. On every call to [SetStateMessage] or [SetStateError],
+// a new snapshot is appended and the oldest entry is evicted when the buffer overflows.
+// [GetStatus] derives its result by reading the latest snapshot from each name's history list.
 //
 // Usage inside your service component:
 //
@@ -144,7 +149,10 @@ package healthcheck // import "github.com/crypto-bundle/bc-wallet-common-lib-hea
 //	unit.SetStateError("db_pool", dbErr)
 //
 // Concurrent writes are safe — a sync.RWMutex protects internal maps. Unit tests cover
-// simultaneous read/write scenarios under the race detector.
+// simultaneous read/write scenarios under the race detector. History queries are also available:
+//
+//	allStates := unit.GetHistory("db_pool")      // all stored snapshots for a field
+//	count     := unit.GetHistoryCount("db_pool") // number of entries in the list
 //
 // # Middleware & Recovery
 //
@@ -170,7 +178,9 @@ package healthcheck // import "github.com/crypto-bundle/bc-wallet-common-lib-hea
 // | [PingProbeHTTPConfig]      | Ping/pong connectivity check settings                 |
 // | [ProbeUnitStatusReport]    | Top-level JSON response body                          |
 // | [ProbeUnitResult]          | Individual unit result with Clone() and IsHealthy()   |
-// | [ProbeStatesUnit]          | Thread-safe mutable state store for probe statuses    |
+// | [probeStatesList]          | FIFO history buffer per named state (default N=8), stores recent ProbeUnitResult snapshots with eviction |
+// | [NewProbeStateList]        | Factory for creating a probeStatesList with a configurable buffer size    |
+// | [ProbeStatesUnit]          | Thread-safe mutable state store with internal FIFO history lists per field  |
 // | [NewProbesConfig]          | Factory that initializes all sub-configs with defaults|
 // | [NewHTTPHealthChecker]     | Constructs the coordinator that manages probe servers |
-// | [NewProbeStateUnit]        | Creates a new states container for a single probe     |
+// | [NewProbeStateUnit]        | Creates a new states container with FIFO history per probe ||

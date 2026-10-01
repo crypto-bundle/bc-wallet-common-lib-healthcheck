@@ -39,31 +39,35 @@ var (
 
 var _ probeStatesService = (*probeStatesUnit)(nil)
 
-// probeStatesUnit manages named health-state entries with per-field error tracking and status recalculation.
+// probeStatesUnit manages named health-state entries where each entry stores a FIFO history of snapshots
+// via probeStatesList. It provides per-field error tracking, status recalculation, and time-travel queries.
 type probeStatesUnit struct {
 	e             errorFormatterService
 	mu            *sync.RWMutex
-	states        map[string]*ProbeUnitResult
+	states        map[string]*probeStatesList
 	mustBeSuccess []string
 	status        probeUnitStatus
 }
 
-// NewProbeStateUnit creates a new probeStatesUnit pre-populated with required state fields. Each field is initialized to success.
+// NewProbeStateUnit creates a new probeStatesUnit pre-populated with required state fields.
+// Each field is initialized with a single successful snapshot in its history buffer.
 func NewProbeStateUnit(
 	errFmtSvc errorFormatterService,
 	requiredStateFields ...string,
 ) *probeStatesUnit {
-	statesMap := make(map[string]*ProbeUnitResult, len(requiredStateFields))
+	statesMap := make(map[string]*probeStatesList, len(requiredStateFields))
 
-	for _, v := range requiredStateFields {
-		statesMap[v] = &ProbeUnitResult{
-			Name:    v,
-			Message: "",
-			Code:    uint16(MessageCodeEverythingOK),
-
+	for _, name := range requiredStateFields {
+		list := NewProbeStateList(defaultStatesListSize)
+		list.AddState(&ProbeUnitResult{
+			Name:       name,
+			Message:    "",
+			Code:       uint16(MessageCodeEverythingOK),
 			err:        nil,
 			isRequired: true,
-		}
+		})
+
+		statesMap[name] = list
 	}
 
 	return &probeStatesUnit{
@@ -77,18 +81,34 @@ func NewProbeStateUnit(
 	}
 }
 
-// GetStatus returns a snapshot of the probe unit status along with all tracked states.
+// GetStatus returns a snapshot of the probe unit status using the latest state from each
+// named field's history list, along with all tracked latest states. Status is computed
+// locally rather than cached to avoid data races under concurrent readers.
 func (w *probeStatesUnit) GetStatus() *ProbeUnitStatusReport {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 
+	states := w.getLatestStates()
+	localStatus := w.computeStatusLocal(states)
+
 	return &ProbeUnitStatusReport{
-		Status: w.status,
-		States: w.getStates(),
+		Status: localStatus,
+		States: states,
 	}
 }
 
-// GetState retrieves a single named state entry, returning nil if the key does not exist.
+// computeStatusLocal derives the overall status from a map of latest states without mutating internal state.
+func (w *probeStatesUnit) computeStatusLocal(states map[string]ProbeUnitResult) probeUnitStatus {
+	for _, r := range states {
+		if r.isRequired && r.err != nil {
+			return ProbeUnitStatusFailed
+		}
+	}
+
+	return ProbeUnitStatusSuccess
+}
+
+// GetState retrieves the latest snapshot for a named state entry, returning nil if the key does not exist.
 func (w *probeStatesUnit) GetState(name string) *ProbeUnitResult {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
@@ -98,10 +118,10 @@ func (w *probeStatesUnit) GetState(name string) *ProbeUnitResult {
 		return nil
 	}
 
-	return value
+	return value.GetLastState()
 }
 
-// GetStatesByNames returns a map of copies for only the requested names, skipping absent keys.
+// GetStatesByNames returns a map of the latest values for only the requested names, skipping absent keys.
 func (w *probeStatesUnit) GetStatesByNames(names ...string) map[string]ProbeUnitResult {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
@@ -114,99 +134,165 @@ func (w *probeStatesUnit) GetStatesByNames(names ...string) map[string]ProbeUnit
 			continue
 		}
 
-		res[v] = value.Clone()
+		last := value.GetLastState()
+		if last == nil {
+			continue
+		}
+
+		res[v] = last.Clone()
 	}
 
 	return res
 }
 
-// GetStates returns a copy of the entire states map keyed by field name.
+// GetStates returns a copy of the latest state for every registered field.
 func (w *probeStatesUnit) GetStates() map[string]ProbeUnitResult {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 
-	return w.getStates()
+	return w.getLatestStates()
 }
 
-func (w *probeStatesUnit) getStates() map[string]ProbeUnitResult {
+func (w *probeStatesUnit) getLatestStates() map[string]ProbeUnitResult {
 	res := make(map[string]ProbeUnitResult, len(w.states))
 
 	for k, v := range w.states {
-		res[k] = v.Clone()
+		last := v.GetLastState()
+		if last != nil {
+			res[k] = last.Clone()
+		}
 	}
 
 	return res
 }
 
-// SetStateMessage updates the Message field of an existing entry or creates a new optional one.
+// SetStateMessage updates the Message field of an existing entry or creates a new optional one,
+// appending a new snapshot to the name's history list.
 func (w *probeStatesUnit) SetStateMessage(name string, message string) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	element, ok := w.states[name]
-	if !ok {
-		w.states[name] = &ProbeUnitResult{
-			Name:    name,
-			Message: message,
-			Code:    uint16(MessageCodeEverythingOK),
-
-			err:        nil,
-			isRequired: false,
-		}
-
-		return
-	}
-
-	element.Message = message
+	w.setSnapshotLocked(name, message, 0, nil, false)
 }
 
-// SetStateError applies the given error to a named entry and recalculates overall status.
+// SetStateError applies the given error to a named entry, creating a new snapshot appended
+// to that name's history list. If err is nil and the name already exists, the error is cleared.
+// If err is nil and the name does not exist, this is a no-op (same as the original behavior).
 func (w *probeStatesUnit) SetStateError(name string, err error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	value, ok := w.states[name]
-
 	switch {
-	case !ok && err != nil:
-		w.states[name] = &ProbeUnitResult{
-			Name:       name,
-			Message:    err.Error(),
-			Code:       uint16(w.e.ErrGetCode(err)), //nolint:gosec // ErrGetCode returns non-negative int, safe conversion
-			err:        err,
-			isRequired: true,
+	case err != nil:
+		// Error present: create/update the entry and append a new snapshot to history.
+		// New entries are always required; existing entries inherit from mustBeSuccess membership.
+		isRequired := false
+		if _, ok := w.states[name]; !ok {
+			isRequired = true
+		} else {
+			for _, n := range w.mustBeSuccess {
+				if n == name {
+					isRequired = true
+
+					break
+				}
+			}
 		}
 
-		w.recalculateStatusLocked()
+		msg := err.Error()
+		rawCode := w.e.ErrGetCode(err)
+		code := uint16(MessageCodeEverythingOK) //nolint:gosec // rawCode is guaranteed >= 0 here
+		if rawCode > 0 {
+			code = uint16(rawCode)
+		}
 
-	case !ok && err == nil:
-		return
+		w.setSnapshotLocked(name, msg, code, err, isRequired)
 
-	case ok && err != nil:
-		value.Message = err.Error()
-		value.Code = uint16(w.e.ErrGetCode(err)) //nolint:gosec // ErrGetCode returns non-negative int, safe conversion
-		value.err = err
+	case containsName(name, w.mustBeSuccess):
+		// Clear error on an existing required field: find it and clear via SetStateMessage (which preserves it if it exists).
+		if _, ok := w.states[name]; ok {
+			w.setSnapshotLocked(name, "", 0, nil, false)
+		}
 
-		w.recalculateStatusLocked()
-
-	case ok && err == nil:
-		value.Message = ""
-		value.Code = uint16(w.e.ErrGetCode(nil)) //nolint:gosec // ErrGetCode returns 0 for nil, safe conversion
-		value.err = nil
-
-		w.recalculateStatusLocked()
+	default:
+		// Optional unknown name with nil error — no-op, matching original semantics.
 	}
 }
 
-// recalculateStatusLocked iterates over all stored probe results and sets the unit status to Failed if any required-field still carries an error; otherwise it resets to Success.
+// setSnapshotLocked creates a new ProbeUnitResult snapshot and appends it to the named field's history list.
+// It recalculates overall status after mutation.
+func (w *probeStatesUnit) setSnapshotLocked(name string, message string, code uint16, err error, isRequired bool) {
+	snapshot := &ProbeUnitResult{
+		Name:       name,
+		Message:    message,
+		Code:       code,
+		err:        err,
+		isRequired: isRequired,
+	}
+
+	stateList, ok := w.states[name]
+	if !ok {
+		stateList = NewProbeStateList(defaultStatesListSize)
+		w.states[name] = stateList
+	}
+
+	stateList.AddState(snapshot)
+	w.recalculateStatusLocked()
+}
+
+// GetHistory returns all historical snapshots for a named state field.
+func (w *probeStatesUnit) GetHistory(name string) []*ProbeUnitResult {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+
+	value, ok := w.states[name]
+	if !ok {
+		return nil
+	}
+
+	return value.GetAllStates()
+}
+
+// GetHistoryCount returns the number of stored snapshots for a named state field.
+func (w *probeStatesUnit) GetHistoryCount(name string) uint {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+
+	value, ok := w.states[name]
+	if !ok {
+		return 0
+	}
+
+	return value.GetStatesCount()
+}
+
+// recalculateStatusLocked iterates over all stored probes and sets the unit status to Failed if any
+// required-field's latest snapshot still carries an error; otherwise it resets to Success.
+// Must be called under write lock (mu.Lock).
 func (w *probeStatesUnit) recalculateStatusLocked() {
+	w.status = ProbeUnitStatusSuccess
+
 	for _, r := range w.states {
-		if r.isRequired && r.err != nil {
+		last := r.getLastStateLocked()
+		if last == nil {
+			continue
+		}
+
+		if last.isRequired && last.err != nil {
 			w.status = ProbeUnitStatusFailed
 
 			return
 		}
 	}
+}
 
-	w.status = ProbeUnitStatusSuccess
+// containsName checks whether the given name appears in a string slice.
+func containsName(name string, items []string) bool {
+	for _, v := range items {
+		if v == name {
+			return true
+		}
+	}
+
+	return false
 }

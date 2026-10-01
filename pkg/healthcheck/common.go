@@ -39,6 +39,7 @@ type probeStatesListService interface {
 	GetStatesCount() uint
 	GetAllStates() []*ProbeUnitResult
 	DrainAllStates() []*ProbeUnitResult
+	AddState(state *ProbeUnitResult)
 }
 
 type probeStatesService interface {
@@ -46,6 +47,8 @@ type probeStatesService interface {
 	SetStateError(name string, err error)
 
 	GetStatus() *ProbeUnitStatusReport
+	GetHistory(name string) []*ProbeUnitResult
+	GetHistoryCount(name string) uint
 }
 
 // probeCheckerConfigService exposes basic configuration for individual probe checker units.

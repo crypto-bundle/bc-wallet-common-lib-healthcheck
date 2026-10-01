@@ -138,8 +138,9 @@ NewHTTPHealthChecker(errFmtSvc, logger, cfgSvc)
 | `middlewareRecovery` | Catches panics, logs diagnostics, returns 500 |
 | `ProbeUnitStatusReport` | Top-level JSON response struct with aggregated `Status` and per-unit `States` map |
 | `ProbeUnitResult` | Individual unit result with `Name`, `Message`, `Code`, and internal `err`/`isRequired` fields |
-| `probeStatesUnit` | Internal worker type used by probeUnits; implements `probeStatesService` interface |
-| `ProbeStatesUnit` | **Exported** — thread-safe mutable state store created via `NewProbeStateUnit(...)`, written by external callers via `SetStateMessage()` / `SetStateError()`, read-only via `GetStatus()` |
+| `probeStatesUnit` | Internal worker type used by probeUnits; implements `probeStatesService` interface. Each named state holds a FIFO history buffer (`*probeStatesList`) with configurable capacity (default N=8). |
+| `ProbeStatesUnit` | **Exported** — thread-safe mutable state store created via `NewProbeStateUnit(...)`, written by external callers via `SetStateMessage()` / `SetStateError()`, read-only via `GetStatus()`. Also exposes `GetHistory(name)` and `GetHistoryCount(name)` for time-travel queries into stored snapshots. |
+| `probeStatesList` | Internal FIFO buffer per named state; stores up to N historical [ProbeUnitResult] snapshots. New entries are appended, oldest evicted on overflow. All getters return deep-cloned copies for mutation safety. `AddState` clones input before storing. |
 
 ### Interfaces (internal, unexported)
 
@@ -147,7 +148,7 @@ NewHTTPHealthChecker(errFmtSvc, logger, cfgSvc)
 |---|---|---|
 | `configService` | `IsLivenessProbeEnable()`, `GetLivenessListenAddress()`, ..., `IsHealthcheckProbeEnable()`, ..., `IsPongProbeEnable()`, `GetPingListenAddress()` | `httpHealthChecker`, `probeUnit` |
 | `probeCheckerConfigService` | `GetListenAddress()`, `GetHTTPReadTimeout()`, `GetHTTPWriteTimeout()`, `GetRequestURL()`, `GetProbeName()` | `newHTPProbeCheckerServer`, `httpHandler` |
-| `probeStatesService` | `SetStateMessage(name, msg)`, `SetStateError(name, err)`, `GetStatus()` | `httpHandler` |
+| `probeStatesService` | `SetStateMessage(name, msg)`, `SetStateError(name, err)`, `GetStatus()`, `GetHistory(name string) []*ProbeUnitResult`, `GetHistoryCount(name string) uint` | `httpHandler`, external callers |
 | `probeHTTPServer` | `ListenAndServe(ctx)` | `httpHealthChecker` |
 | `errorFormatterService` | `ErrWithCode(err, code)`, `NewErrorWithCode(text, code)`, `ErrorGetCode(err)`, `ErrorCodeIsOneOf(err, codes...)`, `ErrorOnly(err, details...)`, `Errorf(err, fmt, args...)`, `NewError(details...)`, ... | `httpHandler`, `middlewareRecovery`, `probeUnit`, `probeStatesUnit` |
 
@@ -242,12 +243,13 @@ The aggregator embeds all five sub-configs. Its `configService` methods delegate
 
 ## Testing
 
-- **Coverage**: Unit tests exist for `probeStatesUnit` (thread-safe state management with concurrent readers/writers, error/message lifecycle, status recalculation logic).
+- **Coverage**: Unit tests exist for `probeStatesUnit` (thread-safe state management with concurrent readers/writers, error/message lifecycle, status recalculation logic) and `probeStatesList` (FIFO append-evict cycle, deep-clone mutation safety, concurrent access under race detector).
 - **Expected approach**: Table-driven tests, one table per public function.
 - **Testing targets**:
   - `NewHTTPHealthChecker` — verify correct probe creation/enabling logic
   - `httpHandler.ServeHTTP` — verify correct status code / JSON aggregation
-  - `probeStatesUnit` — state mutation, concurrent access, status recalculation
+  - `probeStatesUnit` — state mutation, FIFO history growth, concurrent access, status recalculation
+  - `probeStatesList` — constructor defaults, add+evict ordering, GetLastState GetAllStates DrainAllStates cloning
   - `*HTTPConfig.Get*Params()` — verify parameter extraction correctness
   - `middlewareRecovery.ServeHTTP` — verify panic recovery behavior
 
@@ -335,8 +337,10 @@ Every `.go` file must include the full license header block. Use `copyright.txt.
         ├── probe_status_easyjson.go      # Auto-generated easyjson marshalling/unmarshalling
         ├── probe_unit_result.go          # ProbeUnitResult — individual unit result, Clone(), IsHealthy()
         ├── probe_unit_result_easyjson.go # Auto-generated easyjson marshalling/unmarshalling
-        ├── probe_state_unit.go           # probeStatesUnit — mutable state store, thread-safe
-        └── probe_state_unit_test.go      # Unit tests for probeStatesUnit
+        ├── probe_state_unit.go           # probeStatesUnit — mutable state store with FIFO history per field
+        ├── probe_state_unit_test.go      # Unit tests for probeStatesUnit
+        ├── probe_state_list.go           # probeStatesList — FIFO history buffer (default N=8), clone semantics
+        └── probe_state_list_test.go      # Unit tests for probeStatesList
 ```
 
 ---
