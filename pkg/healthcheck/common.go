@@ -34,6 +34,13 @@ import (
 	_ "github.com/mailru/easyjson/gen"
 )
 
+type probeStatesListService interface {
+	GetLastState() *ProbeUnitResult
+	GetStatesCount() uint
+	GetAllStates() []*ProbeUnitResult
+	DrainAllStates() []*ProbeUnitResult
+}
+
 type probeStatesService interface {
 	SetStateMessage(name string, mesage string)
 	SetStateError(name string, err error)
